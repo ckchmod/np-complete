@@ -1,19 +1,17 @@
 // THE LOCK — live procedural lock generation. Browser-safe (pure logic).
 //
-// Random NCL graphs almost never sample a HARD board (most edges reverse in a
-// few moves), so difficulty is CONSTRUCTED, not sampled:
-//
-//   A "relay chain" of length k. The target points into a tight node c0, so it
-//   can't be flipped until c0 gets slack. Slack only arrives by flipping the
-//   chain edge from c1, which needs c1's slack, ... up to c_k, whose reservoir
-//   gives it the only initial slack. So the unique route is: flip a_k, a_{k-1},
-//   ..., a_1, then the target — exactly k+1 moves. Difficulty is the dial k.
+// Difficulty is CONSTRUCTED, not sampled (random graphs almost never sample a
+// hard board). A "relay chain" of length k: the target points into a tight node
+// c0, so it can't be flipped until c0 gets slack; slack only arrives by flipping
+// the chain edge from c1, which needs c1's slack, ... up to c_k whose reservoir
+// holds the only initial slack. The unique route is flip a_k ... a_1, then the
+// target — exactly k+1 moves. Difficulty is the dial k.
 //
 // A rigid 2-node "ground" cluster mutually satisfies inflow and feeds the chain
-// ends, so the start is legal and nothing outside the chain can be flipped to
-// shortcut it. Node positions are scattered + shuffled so the chain isn't a
-// visible line; optional decoys add red herrings. Every board is verified by the
-// solver (solvable + true optimal == par) before being returned.
+// ends, so the start is legal and nothing outside the chain can shortcut it.
+// Node positions come from a force-directed layout (spreads nodes, cuts edge
+// crossings/overlaps). Every board is solver-verified (solvable + true optimal
+// == par) before being returned.
 
 import { bfsSolve } from "./solver.js";
 
@@ -28,35 +26,66 @@ export function makeRng(seed) {
   };
 }
 
-const randint = (rng, n) => Math.floor(rng() * n);
-function shuffle(rng, arr) {
-  const a = arr.slice();
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = randint(rng, i + 1);
-    const tmp = a[i];
-    a[i] = a[j];
-    a[j] = tmp;
-  }
-  return a;
-}
 const round1 = (x) => Math.round(x * 10) / 10;
 
-// Jittered grid over the portrait viewBox so larger boards don't crowd a ring.
-function layout(n, rng) {
-  const cols = Math.max(2, Math.ceil(Math.sqrt(n)));
-  const rows = Math.ceil(n / cols);
-  const X0 = 14, X1 = 86, Y0 = 18, Y1 = 150, JIT = 5;
-  const cw = cols > 1 ? (X1 - X0) / (cols - 1) : 0;
-  const rh = rows > 1 ? (Y1 - Y0) / (rows - 1) : 0;
-  const pts = [];
-  for (let i = 0; i < n; i++) {
-    const col = i % cols;
-    const row = Math.floor(i / cols);
-    const cx = cols > 1 ? X0 + col * cw : 50;
-    const cy = rows > 1 ? Y0 + row * rh : 84;
-    pts.push({ x: round1(cx + (rng() * 2 - 1) * JIT), y: round1(cy + (rng() * 2 - 1) * JIT) });
+// Force-directed (Fruchterman–Reingold) layout over the graph, fit to the
+// portrait viewBox. Spreads connected nodes and reduces edge crossings so
+// unrelated arrows don't land on top of one another.
+function forceLayout(ids, edges, rng) {
+  const n = ids.length;
+  const index = new Map(ids.map((id, i) => [id, i]));
+  const W = 72, H = 132; // interior box (before offset)
+  const k = 0.9 * Math.sqrt((W * H) / n); // ideal edge length
+  const pos = ids.map(() => ({ x: rng() * W, y: rng() * H }));
+  const pairs = edges.map((e) => [index.get(e.u), index.get(e.v)]);
+  let temp = W / 6;
+
+  for (let it = 0; it < 160; it++) {
+    const disp = pos.map(() => ({ x: 0, y: 0 }));
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        let dx = pos[i].x - pos[j].x;
+        let dy = pos[i].y - pos[j].y;
+        let dist = Math.hypot(dx, dy);
+        if (dist < 0.01) { dx = (rng() - 0.5) * 0.1; dy = (rng() - 0.5) * 0.1; dist = Math.hypot(dx, dy) || 0.01; }
+        const f = (k * k) / dist; // repulsion
+        disp[i].x += (dx / dist) * f; disp[i].y += (dy / dist) * f;
+        disp[j].x -= (dx / dist) * f; disp[j].y -= (dy / dist) * f;
+      }
+    }
+    for (const [a, b] of pairs) {
+      let dx = pos[a].x - pos[b].x;
+      let dy = pos[a].y - pos[b].y;
+      const dist = Math.hypot(dx, dy) || 0.01;
+      const f = (dist * dist) / k; // attraction
+      disp[a].x -= (dx / dist) * f; disp[a].y -= (dy / dist) * f;
+      disp[b].x += (dx / dist) * f; disp[b].y += (dy / dist) * f;
+    }
+    for (let i = 0; i < n; i++) {
+      const dl = Math.hypot(disp[i].x, disp[i].y) || 1e-6;
+      const step = Math.min(dl, temp);
+      pos[i].x = Math.max(0, Math.min(W, pos[i].x + (disp[i].x / dl) * step));
+      pos[i].y = Math.max(0, Math.min(H, pos[i].y + (disp[i].y / dl) * step));
+    }
+    temp *= 0.97; // cool
   }
-  return pts;
+
+  // Fit + center into the portrait box.
+  let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+  for (const p of pos) {
+    minx = Math.min(minx, p.x); miny = Math.min(miny, p.y);
+    maxx = Math.max(maxx, p.x); maxy = Math.max(maxy, p.y);
+  }
+  const X0 = 14, X1 = 86, Y0 = 18, Y1 = 150;
+  const spanx = maxx - minx || 1, spany = maxy - miny || 1;
+  const s = Math.min((X1 - X0) / spanx, (Y1 - Y0) / spany);
+  const offx = X0 + ((X1 - X0) - spanx * s) / 2;
+  const offy = Y0 + ((Y1 - Y0) - spany * s) / 2;
+  const out = {};
+  ids.forEach((id, i) => {
+    out[id] = { x: round1(offx + (pos[i].x - minx) * s), y: round1(offy + (pos[i].y - miny) * s) };
+  });
+  return out;
 }
 
 // Difficulty d (1+) -> chain length. optimal ≈ k + 1.
@@ -76,11 +105,6 @@ export function generateLock(difficulty, rng) {
   const decoys = [];
   for (let i = 0; i < decoyCount; i++) decoys.push("k" + i);
   const allIds = [...chain, "x", "y", "g1", "g2", ...decoys];
-
-  // Scatter + shuffle so the chain is not a visible straight line.
-  const pts = layout(allIds.length, rng);
-  const order = shuffle(rng, allIds);
-  const nodes = order.map((id, i) => ({ id, x: pts[i].x, y: pts[i].y }));
 
   const edges = [];
   let ei = 0;
@@ -104,6 +128,9 @@ export function generateLock(difficulty, rng) {
   add("y", chain[k], 2, "uv");
   // Decoys: tight, ground-fed red herrings; never feed the chain.
   for (const dn of decoys) add("g1", dn, 2, "uv");
+
+  const pos = forceLayout(allIds, edges, rng);
+  const nodes = allIds.map((id) => ({ id, x: pos[id].x, y: pos[id].y }));
 
   const level = { id: "lock-d" + d, name: "Lock", nodes, edges, target: targetId };
 

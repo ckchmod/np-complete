@@ -5,9 +5,6 @@ import { createGame } from "./game.js";
 import { createRush } from "./rush.js";
 
 const STORAGE_TUT_DONE = "the-lock:tutorials-done";
-function tutorialsDone() {
-  try { return !!localStorage.getItem(STORAGE_TUT_DONE); } catch (_) { return false; }
-}
 function markTutorialsDone() {
   try { localStorage.setItem(STORAGE_TUT_DONE, "1"); } catch (_) {}
 }
@@ -114,5 +111,5 @@ if (btnHelp) btnHelp.addEventListener("click", showIntro);
 try { if (localStorage.getItem(STORAGE_INTRO_SEEN)) hideIntro(); } catch (_) {}
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
-if (tutorialsDone()) enterRush();
-else goTo(0);
+// Always open on the tutorials (behind the intro). "Skip to Rush" jumps ahead.
+goTo(0);

@@ -148,8 +148,8 @@ html, body {
 }
 
 /* Weight variants */
-.edge-group.is-thick .edge-line  { stroke-width: 2.2; }
-.edge-group.is-thin  .edge-line  { stroke-width: 1.0; }
+.edge-group.is-thick .edge-line  { stroke-width: 3.2; }
+.edge-group.is-thin  .edge-line  { stroke-width: 1.1; }
 .edge-group.is-thick .edge-arrow { /* inherits */ }
 .edge-group.is-thin  .edge-arrow { transform-origin: center; }
 
@@ -158,17 +158,11 @@ html, body {
 .edge-group.is-target .edge-arrow { fill: var(--c-target); }
 
 /* Legal (flippable) affordance */
-.edge-group.is-legal .edge-line {
-  opacity: 1;
-  filter: drop-shadow(0 0 2px var(--c-legal));
-}
-.edge-group.is-legal .edge-arrow {
-  filter: drop-shadow(0 0 2px var(--c-legal));
-}
+.edge-group.is-legal { filter: drop-shadow(0 0 2px var(--c-legal)); }
 
-/* Dim non-legal edges when at least one legal edge exists */
-.board:not(.no-legal) .edge-group:not(.is-legal):not(.is-target) .edge-line  { opacity: 0.28; }
-.board:not(.no-legal) .edge-group:not(.is-legal):not(.is-target) .edge-arrow { opacity: 0.28; }
+/* Dim non-legal edges (applied to the whole group so the line and head don't
+   double-composite into a darker sliver where they meet). */
+.board:not(.no-legal) .edge-group:not(.is-legal):not(.is-target) { opacity: 0.3; }
 
 /* Shake animation for illegal tap */
 @keyframes shake {
