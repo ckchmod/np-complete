@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>THE LOCK</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+
+    <!-- Top bar -->
+    <header id="top-bar">
+      <span id="level-title" class="level-title">THE LOCK</span>
+      <div id="hud">
+        <span id="move-count" class="hud-value">0</span><span class="hud-label"> moves</span>
+        <span class="hud-sep">·</span>
+        <span id="par-display" class="hud-label">par —</span>
+        <span class="hud-sep">·</span>
+        <span id="pb-display" class="hud-label pb"></span>
+      </div>
+    </header>
+
+    <!-- Board -->
+    <main id="board-wrap">
+      <svg id="board" class="board" aria-label="puzzle board"></svg>
+    </main>
+
+    <!-- Hint -->
+    <p id="level-hint" class="level-hint"></p>
+
+    <!-- Controls -->
+    <div id="controls">
+      <button id="btn-undo" class="btn btn-secondary" aria-label="Undo last move">Undo</button>
+      <button id="btn-reset" class="btn btn-secondary" aria-label="Reset to start">Reset</button>
+    </div>
+
+    <!-- Tutorial navigation -->
+    <nav id="nav-bar">
+      <button id="nav-prev" class="btn btn-ghost" aria-label="Previous level" disabled>←</button>
+      <span id="nav-label" class="nav-label"></span>
+      <button id="nav-next" class="btn btn-ghost" aria-label="Next level">→</button>
+      <button id="nav-skip" class="btn btn-ghost nav-skip" aria-label="Skip tutorials">Skip to THE LOCK</button>
+    </nav>
+
+    <!-- Result card (hidden until win) -->
+    <div id="result-card" class="result-card hidden" role="dialog" aria-modal="true" aria-label="Puzzle solved">
+      <div class="result-inner">
+        <div class="result-stars" id="result-stars">★★★</div>
+        <div class="result-title">SOLVED</div>
+        <div class="result-row">
+          <span class="result-label">Moves</span>
+          <span class="result-value" id="result-moves">—</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Optimal</span>
+          <span class="result-value" id="result-par">—</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Score</span>
+          <span class="result-value" id="result-score">—</span>
+        </div>
+        <div class="result-pb" id="result-pb"></div>
+        <div class="result-hash" id="result-hash"></div>
+        <div class="result-actions">
+          <button id="btn-share" class="btn btn-primary">Copy result</button>
+          <button id="btn-play-again" class="btn btn-secondary">Play again</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+  <script>
+    // Wire play-again inside result card (no module needed)
+    document.addEventListener('DOMContentLoaded', () => {
+      const btn = document.getElementById('btn-play-again');
+      const card = document.getElementById('result-card');
+      const resetBtn = document.getElementById('btn-reset');
+      if (btn && resetBtn) {
+        btn.addEventListener('click', () => {
+          card.classList.remove('visible');
+          card.classList.add('hidden');
+          resetBtn.click();
+        });
+      }
+    });
+  </script>
+</body>
+</html>

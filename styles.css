@@ -1,0 +1,460 @@
+/* THE LOCK — Minimal Noir Theme
+   Palette: near-black bg, white/grey graph, teal legal glow, red target, amber slack.
+   Typography: DM Mono (readouts) + Space Mono (labels).
+*/
+
+/* ── Reset & base ─────────────────────────────────────────────────────────── */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg:          #09090e;
+  --bg-surface:  #111118;
+  --bg-overlay:  rgba(9, 9, 14, 0.92);
+  --c-white:     #e8e8ec;
+  --c-grey:      #6a6a7a;
+  --c-dim:       #333340;
+  --c-target:    #ff3333;
+  --c-legal:     #00d4ff;
+  --c-slack:     #ffaa00;
+  --c-win:       #00d4ff;
+  --font-mono:   'DM Mono', 'Courier New', monospace;
+  --font-label:  'Space Mono', monospace;
+  --radius:      4px;
+  --transition:  0.18s ease;
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--c-white);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.4;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── App shell ────────────────────────────────────────────────────────────── */
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 0;
+  position: relative;
+}
+
+/* ── Top bar ──────────────────────────────────────────────────────────────── */
+
+#top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px 8px;
+  border-bottom: 1px solid var(--c-dim);
+  flex-shrink: 0;
+}
+
+.level-title {
+  font-family: var(--font-label);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--c-white);
+  text-transform: uppercase;
+}
+
+#hud {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.hud-value {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--c-white);
+  min-width: 1.8ch;
+  text-align: right;
+}
+
+.hud-label {
+  color: var(--c-grey);
+  font-size: 11px;
+}
+
+.hud-sep {
+  color: var(--c-dim);
+  margin: 0 2px;
+}
+
+.pb {
+  color: var(--c-slack);
+  font-size: 11px;
+}
+
+/* ── Board ────────────────────────────────────────────────────────────────── */
+
+#board-wrap {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  min-height: 0;
+}
+
+.board {
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  overflow: visible;
+  touch-action: none;
+}
+
+/* ── Edge styles ──────────────────────────────────────────────────────────── */
+
+.edge-group {
+  cursor: pointer;
+}
+
+.edge-line {
+  stroke: var(--c-grey);
+  stroke-linecap: round;
+  transition: stroke var(--transition), opacity var(--transition);
+}
+
+.edge-arrow {
+  fill: var(--c-grey);
+  transition: fill var(--transition), opacity var(--transition);
+}
+
+.edge-hit {
+  stroke: transparent;
+  stroke-width: 8;
+  fill: none;
+  cursor: pointer;
+}
+
+/* Weight variants */
+.edge-group.is-thick .edge-line  { stroke-width: 2.2; }
+.edge-group.is-thin  .edge-line  { stroke-width: 1.0; }
+.edge-group.is-thick .edge-arrow { /* inherits */ }
+.edge-group.is-thin  .edge-arrow { transform-origin: center; }
+
+/* Target edge */
+.edge-group.is-target .edge-line  { stroke: var(--c-target); }
+.edge-group.is-target .edge-arrow { fill: var(--c-target); }
+
+/* Legal (flippable) affordance */
+.edge-group.is-legal .edge-line {
+  opacity: 1;
+  filter: drop-shadow(0 0 2px var(--c-legal));
+}
+.edge-group.is-legal .edge-arrow {
+  filter: drop-shadow(0 0 2px var(--c-legal));
+}
+
+/* Dim non-legal edges when at least one legal edge exists */
+.board:not(.no-legal) .edge-group:not(.is-legal):not(.is-target) .edge-line  { opacity: 0.28; }
+.board:not(.no-legal) .edge-group:not(.is-legal):not(.is-target) .edge-arrow { opacity: 0.28; }
+
+/* Shake animation for illegal tap */
+@keyframes shake {
+  0%   { transform: translateX(0); }
+  20%  { transform: translateX(-3px); }
+  40%  { transform: translateX(3px); }
+  60%  { transform: translateX(-2px); }
+  80%  { transform: translateX(2px); }
+  100% { transform: translateX(0); }
+}
+
+.edge-group.is-shaking {
+  animation: shake 0.35s ease-out forwards;
+}
+
+/* ── Node styles ──────────────────────────────────────────────────────────── */
+
+.node-group {
+  /* transform set inline via translate() in render.js */
+}
+
+.node-glow {
+  fill: none;
+  stroke: var(--c-slack);
+  stroke-width: 1.6;
+  opacity: 0;
+  /* Slack-proportional opacity via CSS calc on --slack custom property */
+  opacity: calc(var(--slack, 0) * 0.22);
+  transition: opacity 0.3s ease;
+  filter: blur(0.4px);
+}
+
+/* Override for nodes with significant slack */
+.node-group[style*="--slack: 1"] .node-glow,
+.node-group[style*="--slack:1"]  .node-glow { opacity: 0.45; }
+.node-group[style*="--slack: 2"] .node-glow,
+.node-group[style*="--slack:2"]  .node-glow { opacity: 0.65; }
+.node-group[style*="--slack: 3"] .node-glow,
+.node-group[style*="--slack:3"]  .node-glow { opacity: 0.78; }
+.node-group[style*="--slack: 4"] .node-glow,
+.node-group[style*="--slack:4"]  .node-glow { opacity: 0.88; }
+
+.node-ring {
+  fill: var(--bg);
+  stroke: var(--c-grey);
+  stroke-width: 0.9;
+  transition: stroke var(--transition);
+}
+
+/* Tight node: dimmer, strained look */
+.node-group.is-tight .node-ring {
+  stroke: #444450;
+}
+
+/* Pulse animation */
+@keyframes node-pulse {
+  0%   { r: 3.2; opacity: 1; }
+  40%  { r: 5.2; opacity: 0.6; }
+  100% { r: 3.2; opacity: 1; }
+}
+
+.node-group.is-pulsing .node-ring {
+  animation: node-pulse 0.45s ease-out forwards;
+}
+
+/* Win pulse */
+@keyframes win-pulse {
+  0%   { stroke: var(--c-grey); r: 3.2; }
+  35%  { stroke: var(--c-win);  r: 5.6; }
+  100% { stroke: var(--c-win);  r: 3.2; }
+}
+
+.node-group.is-pulsing .node-ring {
+  animation: win-pulse 0.5s ease-out forwards;
+}
+
+.board.is-won .node-glow {
+  stroke: var(--c-win);
+}
+
+/* ── Hint ─────────────────────────────────────────────────────────────────── */
+
+.level-hint {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--c-grey);
+  text-align: center;
+  padding: 0 16px 6px;
+  min-height: 20px;
+  flex-shrink: 0;
+  font-style: italic;
+}
+
+/* ── Controls ─────────────────────────────────────────────────────────────── */
+
+#controls {
+  display: flex;
+  gap: 8px;
+  padding: 6px 16px;
+  flex-shrink: 0;
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────────────── */
+
+.btn {
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition), opacity var(--transition);
+  padding: 9px 16px;
+  min-height: 40px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.btn-primary {
+  background: var(--c-white);
+  color: var(--bg);
+  flex: 1;
+}
+.btn-primary:hover:not(:disabled) { background: #d0d0d8; }
+
+.btn-secondary {
+  background: var(--bg-surface);
+  color: var(--c-grey);
+  border: 1px solid var(--c-dim);
+  flex: 1;
+}
+.btn-secondary:hover:not(:disabled) { color: var(--c-white); border-color: var(--c-grey); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--c-grey);
+  border: none;
+  padding: 8px 12px;
+  min-height: 44px;
+}
+.btn-ghost:hover:not(:disabled) { color: var(--c-white); }
+
+/* ── Nav bar ──────────────────────────────────────────────────────────────── */
+
+#nav-bar {
+  display: flex;
+  align-items: center;
+  padding: 4px 12px 8px;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.nav-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--c-grey);
+  flex: 1;
+  text-align: center;
+}
+
+.nav-skip {
+  font-size: 10px;
+  color: var(--c-dim);
+  letter-spacing: 0.04em;
+  padding: 6px 8px;
+}
+.nav-skip:hover { color: var(--c-grey); }
+
+/* ── Result card ──────────────────────────────────────────────────────────── */
+
+.result-card {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: var(--bg-overlay);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 10;
+  transition: opacity 0.3s ease;
+}
+
+.result-card.hidden {
+  display: none;
+}
+
+.result-card.visible {
+  display: flex;
+  animation: slide-up 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes slide-up {
+  from { transform: translateY(40px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.result-inner {
+  width: 100%;
+  max-width: 480px;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--c-dim);
+  border-radius: 12px 12px 0 0;
+  padding: 24px 24px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.result-stars {
+  font-size: 28px;
+  text-align: center;
+  letter-spacing: 4px;
+  color: var(--c-slack);
+  line-height: 1;
+}
+
+.result-title {
+  font-family: var(--font-label);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: var(--c-white);
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.result-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--c-dim);
+}
+
+.result-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--c-grey);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.result-value {
+  font-family: var(--font-label);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--c-white);
+}
+
+.result-pb {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--c-slack);
+  text-align: center;
+  min-height: 16px;
+}
+
+.result-hash {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--c-grey);
+  text-align: center;
+  letter-spacing: 0.1em;
+}
+
+.result-actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+/* ── Scrollbar ────────────────────────────────────────────────────────────── */
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--c-dim); border-radius: 2px; }
+
+/* ── Focus visible ────────────────────────────────────────────────────────── */
+
+.btn:focus-visible {
+  outline: 2px solid var(--c-legal);
+  outline-offset: 2px;
+}

@@ -74,14 +74,15 @@ A level is valid iff its start orientation is legal (every node inflow ≥ 2). V
 
 ## 7. Solver & Non-Triviality Gates
 
-Configuration encoded as a bitmask over edges (bit = orientation vs. a fixed canonical direction). `bfsSolve` explores legal configurations from the start; neighbors are legal single-edge flips; it returns the shortest path to any configuration where `t` is reversed (optimal length `L`, a witnessing goal config `g*`, and the reachable-component size as a sanity bound).
+Configuration encoded as a bitmask over edges (bit = orientation vs. a fixed canonical direction). `bfsSolve` explores legal configurations from the start; neighbors are legal single-edge flips. It runs the BFS to exhaustion (not stopping at the goal) so it returns both the shortest path to any configuration where `t` is reversed (optimal length `L`, with a witnessing goal config `g*`) and the full reachable-component size — the count of all distinct legal configurations reachable from the start — as the §14 tractability sanity bound.
 
 **THE LOCK must pass all gates** (thresholds tuned by playtest):
 
 1. **Solvable** — BFS finds a path.
 2. **Not trivial on move 1** — `t` is not flippable from the start.
-3. **Deep** — optimal length `L ≥ T` (aim `T ≥ 25`).
+3. **Challenging but achievable** — optimal length `L` in a gamifiable band: firm lower gate **L ≥ 12** (hard enough that hitting *par* is a real chase), soft upper preference **L ≤ 30** (achievable in a session, not a brutal opaque wall). Sweet spot ~15–25.
 4. **Backtracking required** — greedy hill-climb on Hamming distance to `g*` (always take the legal flip that most reduces distance) **cannot** reach `g*`; i.e. every solution must temporarily move *away* from the goal. Heuristic proxy for "you must back out of a decision," confirmed by manual playtest.
+5. **Approachable entry** — several legal first moves exist and early moves produce visible progress (slack shifts near the target), so the board is an on-ramp rather than a cold brick.
 
 Tutorials need only gate 1 (solvable) plus a tiny optimal length appropriate to the concept taught.
 
@@ -123,12 +124,17 @@ Visual polish uses the frontend-design tooling to make the noir aesthetic genuin
 
   The trailing **path hash** is a short hash of the canonical move sequence — it proves a genuine solve without revealing the route.
 
-## 11. Scoring & Competition
+## 11. Scoring, Par & Gamification
 
-Per user directive (2026-05-28): build the **score primitives** in v1 so people can compare/compete; defer the live leaderboard until after the game is playable.
+Per user directive (2026-05-28): the game **has to be gamifiable** — one hero board, but wrapped in a real competitive/score gradient and an addictive "one more try" loop. Build the score primitives in v1; defer the live leaderboard.
 
-- **v1 (in scope):** primary metric is **moves-to-solve** (lower is better) compared to the solver's **optimal**; time and undo-count are secondary. Personal best in `localStorage`. The shareable result enables Wordle-style asynchronous "beat my score" competition.
-- **Deferred (v2+):** a backend leaderboard / accounts for live global ranking. The architecture stays backend-optional — adding a leaderboard means POSTing `{moveCount, time, pathHash}` to an API, with **server-side validation by replaying the move sequence through the same pure `engine.js`**. No rework of the game core.
+- **Par & stars.** The solver computes the optimal move count = **par**. Each solve is rated: `moves ≤ par` → ★★★ "Master pick"; `par < moves ≤ par+5` → ★★; `moves > par+5` → ★.
+- **Score.** One legible number for competition, rewarding fewer moves / less time / fewer undos — e.g. `score = max(0, 1000 − 10·(moves − par) − timePenalty − 2·undos)`, tuned so a clean par-with-no-undos solve is a round number.
+- **The loop (why players retry).** Frictionless Undo/Reset; the result card shows `moves · par · stars · personal best` and how close you came. Missing par by a little is the hook to replay. Personal best persists in `localStorage`.
+- **Visible progress (anti-bounce).** During play, restrained feedback that the lock is yielding (e.g. a count of nodes near the target that have gained slack) — never the solution path.
+- **Onboarding ramp.** The 5 tutorials ease players in so the hero board is not a cold wall.
+- **Competition.** The shareable result (score, par, stars, path hash) enables Wordle-style asynchronous "beat my score."
+- **Deferred (v2+):** a backend leaderboard / accounts for live global ranking. The architecture stays backend-optional — adding it means POSTing `{score, moves, time, pathHash}` to an API, with **server-side validation by replaying the move sequence through the same pure `engine.js`**. No rework of the game core.
 
 ## 12. Verification Plan (how I self-evaluate)
 

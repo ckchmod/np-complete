@@ -1,0 +1,12 @@
+{
+  "name": "the-lock",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "THE LOCK — a puzzle game based on Nondeterministic Constraint Logic (PSPACE-complete)",
+  "scripts": {
+    "test": "node --test",
+    "gates": "node scripts/gates.mjs",
+    "start": "python3 -m http.server 8000"
+  }
+}
