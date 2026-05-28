@@ -99,6 +99,19 @@ function curvePath(c) {
   return `M ${e.sx} ${e.sy} Q ${c.cx} ${c.cy} ${e.ex} ${e.ey}`;
 }
 
+// Visible line, pulled back at the HEAD end so the arrowhead sits in clear space
+// (no line running under it / cap poking past the tip). The hit area still uses
+// the full curve, so tappability is unchanged.
+function linePath(c, headEnd) {
+  const e = trimmedEnds(c);
+  if (headEnd === "B") {
+    const [dx, dy] = qTangent(c, 1);
+    return `M ${e.sx} ${e.sy} Q ${c.cx} ${c.cy} ${e.ex - dx * ARROW_LEN} ${e.ey - dy * ARROW_LEN}`;
+  }
+  const [tx, ty] = qTangent(c, 0);
+  return `M ${e.ex} ${e.ey} Q ${c.cx} ${c.cy} ${e.sx + tx * ARROW_LEN} ${e.sy + ty * ARROW_LEN}`;
+}
+
 // Arrowhead triangle whose tip sits at the head point and points along `dir`.
 function arrowTriangle(tipX, tipY, dx, dy) {
   const baseX = tipX - dx * ARROW_LEN;
@@ -176,7 +189,7 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
     });
     group.dataset.edge = edge.id;
 
-    const line = el("path", { class: "edge-line", d: curvePath(curve) });
+    const line = el("path", { class: "edge-line", d: linePath(curve, toEnd) });
     const arrow = el("path", { class: "edge-arrow", d: arrowPathFor(curve, toEnd) });
     const hit = el("path", { class: "edge-hit", d: curvePath(curve) });
 
@@ -247,13 +260,18 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
     const fromT = headEnd(prevEnds, view.edge) === "B" ? 1 : 0;
     const toT = headEnd(nextEnds, view.edge) === "B" ? 1 : 0;
     const dirSign = toT > fromT ? 1 : -1;
+    view.line.setAttribute("d", curvePath(c)); // full curve while the head glides across
     const t0 = performance.now();
     function frame(now) {
       const k = Math.min(1, (now - t0) / REVERSAL_MS);
       const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
       view.arrow.setAttribute("d", arrowPathAtT(c, fromT + (toT - fromT) * e, dirSign));
       if (k < 1) requestAnimationFrame(frame);
-      else view.arrow.setAttribute("d", arrowPathFor(c, toT === 1 ? "B" : "A"));
+      else {
+        const head = toT === 1 ? "B" : "A";
+        view.arrow.setAttribute("d", arrowPathFor(c, head));
+        view.line.setAttribute("d", linePath(c, head)); // re-trim at the settled head
+      }
     }
     requestAnimationFrame(frame);
   }

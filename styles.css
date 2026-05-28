@@ -346,6 +346,76 @@ html, body {
 
 /* ── Result card ──────────────────────────────────────────────────────────── */
 
+/* ── Front-page objective / how-to-play overlay ───────────────────────────── */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--bg-overlay);
+  backdrop-filter: blur(3px);
+}
+.overlay.hidden { display: none; }
+.overlay-card {
+  width: 100%;
+  max-width: 360px;
+  background: var(--bg-surface);
+  border: 1px solid var(--c-dim);
+  border-radius: var(--radius);
+  padding: 28px 24px;
+  text-align: center;
+}
+.intro-logo {
+  font-family: var(--font-label);
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  font-size: 22px;
+  color: var(--c-white);
+  margin-bottom: 14px;
+}
+.intro-goal {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  color: var(--c-white);
+  margin: 0 0 18px;
+}
+.intro-red { color: var(--c-target); }
+.intro-rules {
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--c-grey);
+  margin: 0 0 16px;
+  padding-left: 18px;
+}
+.intro-rules li { margin-bottom: 8px; }
+.intro-rules b { color: var(--c-white); font-weight: 500; }
+.intro-foot {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--c-grey);
+  margin: 0 0 20px;
+}
+.btn-help {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--c-dim);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--c-grey);
+  font-family: var(--font-label);
+  font-size: 13px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-help:hover { color: var(--c-white); border-color: var(--c-grey); }
+
 .result-card {
   position: absolute;
   inset: 0;

@@ -23,6 +23,9 @@ const navPrev   = document.getElementById("nav-prev");
 const navNext   = document.getElementById("nav-next");
 const navSkip   = document.getElementById("nav-skip");
 const navLabel  = document.getElementById("nav-label");
+const introEl   = document.getElementById("intro");
+const btnStart  = document.getElementById("btn-start");
+const btnHelp   = document.getElementById("btn-help");
 
 // ── Level sequence ────────────────────────────────────────────────────────────
 
@@ -94,6 +97,18 @@ if (navSkip) navSkip.addEventListener("click", () => {
   markTutorialsDone();
   goTo(TUTORIALS.length); // jump straight to THE LOCK
 });
+
+// ── Intro / objective overlay ───────────────────────────────────────────────
+const STORAGE_INTRO_SEEN = "the-lock:intro-seen";
+function hideIntro() { if (introEl) introEl.classList.add("hidden"); }
+function showIntro() { if (introEl) introEl.classList.remove("hidden"); }
+if (btnStart) btnStart.addEventListener("click", () => {
+  try { localStorage.setItem(STORAGE_INTRO_SEEN, "1"); } catch (_) {}
+  hideIntro();
+});
+if (btnHelp) btnHelp.addEventListener("click", showIntro);
+// Returning players skip the intro (reopen any time via the ? button).
+try { if (localStorage.getItem(STORAGE_INTRO_SEEN)) hideIntro(); } catch (_) {}
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 

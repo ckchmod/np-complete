@@ -22,6 +22,7 @@
         <span class="hud-sep">·</span>
         <span id="pb-display" class="hud-label pb"></span>
       </div>
+      <button id="btn-help" class="btn-help" aria-label="How to play">?</button>
     </header>
 
     <!-- Board -->
@@ -69,6 +70,21 @@
           <button id="btn-share" class="btn btn-primary">Copy result</button>
           <button id="btn-play-again" class="btn btn-secondary">Play again</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Front-page objective / how to play -->
+    <div id="intro" class="overlay" role="dialog" aria-modal="true" aria-label="How to play">
+      <div class="overlay-card">
+        <div class="intro-logo">THE LOCK</div>
+        <p class="intro-goal">Reverse the <span class="intro-red">red</span> arrow.</p>
+        <ul class="intro-rules">
+          <li>Tap an arrow to flip its direction.</li>
+          <li>Every node must always have at least <b>2</b> arrows pointing in — a thin arrow counts <b>1</b>, a thick arrow counts <b>2</b>.</li>
+          <li>You can only flip an arrow if every node stays satisfied.</li>
+        </ul>
+        <p class="intro-foot">A few quick puzzles teach you the rest, then pick as many locks as you can.</p>
+        <button id="btn-start" class="btn btn-primary">Start</button>
       </div>
     </div>
 
