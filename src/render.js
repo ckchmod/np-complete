@@ -5,42 +5,31 @@
 // CSS classes (see styles.css); this module only sets geometry, class names,
 // and a few CSS custom properties the stylesheet consumes.
 //
-// CSS contract (classes/vars styles.css must define):
-//   .board                          root <svg>
-//   .edge-group                     <g> wrapping one edge (line + hit area + arrow)
-//     [data-edge]                   edge id (for hit-testing / queries)
-//     .is-thick / .is-thin         weight 2 vs weight 1
-//     .is-target                    the red target edge
-//     .is-legal                     currently flippable (set by markLegal)
-//     .is-shaking                   transient illegal-tap shake
-//   .edge-line                      the visible stroke
-//   .edge-hit                       fat transparent hit area (stroke, no fill)
-//   .edge-arrow                     arrowhead <path>
-//   .node-group                     <g> wrapping one node
-//     [data-node]                   node id
-//     .is-tight                     slack === 0 (strained/locked look)
-//     .is-pulsing                   transient pulse
-//     --slack                       numeric slack (0,1,2,...) for glow scaling
-//   .node-glow                      outer slack glow ring
-//   .node-ring                      the node ring itself
-//   .board.is-won                   set during the win cascade
+// Edges are drawn as quadratic Béziers. The curve LOCUS depends only on the
+// fixed node pair (edge.u, edge.v) and a perpendicular "bow", never on the
+// current orientation — so a flip only glides the arrowhead from one end to the
+// other; the line itself does not move. Parallel edges (same node pair) bow
+// apart in opposite directions so they are visually distinct AND have separate
+// tap targets — fixing both the overlap and the "tapping the red arrow does
+// nothing" bug (previously a parallel's fat hit area covered the target).
 //
-// Animation is done by toggling classes (CSS transitions/keyframes) plus SVG
-// geometry interpolation for the arrow reversal. Re-adding a keyframe class
-// requires a reflow between removal and re-add; helpers below handle that.
+// CSS contract (classes/vars styles.css must define):
+//   .board / .edge-group[data-edge] / .is-thick/.is-thin / .is-target /
+//   .is-legal / .is-shaking / .edge-line (fill:none) / .edge-hit (fat,
+//   transparent, fill:none) / .edge-arrow / .node-group[data-node] /
+//   .is-tight / .is-pulsing / --slack / .node-glow / .node-ring / .board.is-won
 
 import { edgeEnds, nodeSlack } from "./engine.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
-// Visual constants kept here are *geometry*, not colour. Colour/strokes/glow
-// intensity belong to CSS. These describe layout in viewBox units.
-const NODE_R = 3.2; // node ring radius (viewBox units)
-const ARROW_LEN = 2.6; // arrowhead length along the edge
-const ARROW_HALF = 1.6; // arrowhead half-width
-const PARALLEL_GAP = 2.0; // perpendicular offset between parallel edges
-const ENDPOINT_GAP = NODE_R + 0.6; // stop strokes short of the node ring
-const REVERSAL_MS = 280; // arrow reversal animation duration
+// Geometry only (viewBox units). Colour/stroke intensity belong to CSS.
+const NODE_R = 3.2; // node ring radius
+const ARROW_LEN = 2.8; // arrowhead length along the edge
+const ARROW_HALF = 1.7; // arrowhead half-width
+const ENDPOINT_GAP = NODE_R + 0.8; // stop strokes short of the node ring
+const BOW_STEP = 13; // perpendicular control-point offset between parallels
+const REVERSAL_MS = 300; // arrow reversal animation duration
 
 function el(name, attrs) {
   const node = document.createElementNS(SVG_NS, name);
@@ -48,100 +37,136 @@ function el(name, attrs) {
   return node;
 }
 
-// Force a style/layout flush so a just-removed keyframe class re-triggers.
 function reflow(node) {
-  // Reading a layout property is enough to flush pending class changes.
   void node.getBoundingClientRect();
 }
 
-// Restart a one-shot animation class: remove, reflow, re-add on next frame.
 function restartClass(node, cls) {
   node.classList.remove(cls);
   reflow(node);
-  // rAF guards against batching when several restarts happen in one tick.
   requestAnimationFrame(() => node.classList.add(cls));
 }
 
-// Geometry for one edge in its current orientation. Parallel edges (same node
-// pair) are pushed apart along the perpendicular so both stay tappable.
-function edgeGeometry(config, edge, ends, offset) {
-  const nodeById = config.__nodeById;
-  const a = nodeById.get(ends.from);
-  const b = nodeById.get(ends.to);
+function unit(dx, dy) {
+  const L = Math.hypot(dx, dy) || 1;
+  return [dx / L, dy / L];
+}
 
-  let dx = b.x - a.x;
-  let dy = b.y - a.y;
-  const len = Math.hypot(dx, dy) || 1;
-  const ux = dx / len; // unit vector from -> to
-  const uy = dy / len;
-  const px = -uy; // perpendicular unit
+// Curve locus for an edge: fixed by (u,v) positions + a perpendicular bow.
+// Orientation-independent, so reversals don't move the line.
+function edgeCurve(nodeById, edge, bow) {
+  const A = nodeById.get(edge.u);
+  const B = nodeById.get(edge.v);
+  const [ux, uy] = unit(B.x - A.x, B.y - A.y);
+  const px = -uy;
   const py = ux;
-
-  const ox = px * offset;
-  const oy = py * offset;
-
-  // Trim both ends so the stroke meets the ring, not the centre.
-  const x1 = a.x + ux * ENDPOINT_GAP + ox;
-  const y1 = a.y + uy * ENDPOINT_GAP + oy;
-  const x2 = b.x - ux * ENDPOINT_GAP + ox;
-  const y2 = b.y - uy * ENDPOINT_GAP + oy;
-
-  return { x1, y1, x2, y2, ux, uy, px, py };
+  const mx = (A.x + B.x) / 2;
+  const my = (A.y + B.y) / 2;
+  return {
+    ax: A.x, ay: A.y,
+    bx: B.x, by: B.y,
+    cx: mx + px * bow, cy: my + py * bow, // quadratic control point
+  };
 }
 
-// Build the arrowhead path (a filled triangle) at the `to` end of a segment.
-function arrowPath(g) {
-  const tipX = g.x2;
-  const tipY = g.y2;
-  const baseX = tipX - g.ux * ARROW_LEN;
-  const baseY = tipY - g.uy * ARROW_LEN;
-  const leftX = baseX + g.px * ARROW_HALF;
-  const leftY = baseY + g.py * ARROW_HALF;
-  const rightX = baseX - g.px * ARROW_HALF;
-  const rightY = baseY - g.py * ARROW_HALF;
-  return `M ${tipX} ${tipY} L ${leftX} ${leftY} L ${rightX} ${rightY} Z`;
+function qPoint(c, t) {
+  const mt = 1 - t;
+  return [
+    mt * mt * c.ax + 2 * mt * t * c.cx + t * t * c.bx,
+    mt * mt * c.ay + 2 * mt * t * c.cy + t * t * c.by,
+  ];
 }
 
-// Among all edges sharing this unordered node pair, return a signed offset for
-// `edge` so parallels are symmetric about the centre line. Single edges get 0.
-function parallelOffset(level, edge) {
+function qTangent(c, t) {
+  return unit(
+    2 * (1 - t) * (c.cx - c.ax) + 2 * t * (c.bx - c.cx),
+    2 * (1 - t) * (c.cy - c.ay) + 2 * t * (c.by - c.cy)
+  );
+}
+
+// Endpoints pulled back to the node rings, along the curve's end tangents.
+function trimmedEnds(c) {
+  const [t0x, t0y] = qTangent(c, 0);
+  const [t1x, t1y] = qTangent(c, 1);
+  return {
+    sx: c.ax + t0x * ENDPOINT_GAP, sy: c.ay + t0y * ENDPOINT_GAP,
+    ex: c.bx - t1x * ENDPOINT_GAP, ey: c.by - t1y * ENDPOINT_GAP,
+  };
+}
+
+function curvePath(c) {
+  const e = trimmedEnds(c);
+  return `M ${e.sx} ${e.sy} Q ${c.cx} ${c.cy} ${e.ex} ${e.ey}`;
+}
+
+// Arrowhead triangle whose tip sits at the head point and points along `dir`.
+function arrowTriangle(tipX, tipY, dx, dy) {
+  const baseX = tipX - dx * ARROW_LEN;
+  const baseY = tipY - dy * ARROW_LEN;
+  const px = -dy;
+  const py = dx;
+  return (
+    `M ${tipX} ${tipY} ` +
+    `L ${baseX + px * ARROW_HALF} ${baseY + py * ARROW_HALF} ` +
+    `L ${baseX - px * ARROW_HALF} ${baseY - py * ARROW_HALF} Z`
+  );
+}
+
+// Arrowhead at the resting head end ('A' or 'B').
+function arrowPathFor(c, toEnd) {
+  const e = trimmedEnds(c);
+  if (toEnd === "B") {
+    const [dx, dy] = qTangent(c, 1);
+    return arrowTriangle(e.ex, e.ey, dx, dy);
+  }
+  const [tx, ty] = qTangent(c, 0);
+  return arrowTriangle(e.sx, e.sy, -tx, -ty);
+}
+
+// Arrowhead mid-glide at parameter t, pointing in travel direction (dirSign).
+function arrowPathAtT(c, t, dirSign) {
+  const [tipX, tipY] = qPoint(c, t);
+  const [tx, ty] = qTangent(c, t);
+  return arrowTriangle(tipX, tipY, tx * dirSign, ty * dirSign);
+}
+
+// Signed bow for an edge within its parallel group (a lone edge bows 0 = straight).
+function parallelBow(level, edge) {
   const key = (e) => (e.u < e.v ? e.u + "|" + e.v : e.v + "|" + e.u);
   const k = key(edge);
   const group = level.edges.filter((e) => key(e) === k);
   if (group.length < 2) return 0;
   const i = group.findIndex((e) => e.id === edge.id);
-  // Center the group: offsets ..., -gap, 0, +gap, ... around the midpoint.
   const mid = (group.length - 1) / 2;
-  return (i - mid) * PARALLEL_GAP;
+  return (i - mid) * BOW_STEP;
+}
+
+// Which physical end ('A'=u, 'B'=v) is the current arrowhead at?
+function headEnd(ends, edge) {
+  return ends.to === edge.v ? "B" : "A";
 }
 
 export function createBoard(svgEl, config, { onEdgeTap } = {}) {
-  // Index nodes once; stash on config-shaped lookup we own (not the frozen one).
   const nodeById = new Map(config.level.nodes.map((n) => [n.id, n]));
-  // Local view state, never mutating the engine config.
-  let current = withIndex(config, nodeById);
+  let current = config;
 
   svgEl.classList.add("board");
-  // Portrait viewBox derived from node extents with padding.
   svgEl.setAttribute("viewBox", computeViewBox(config.level));
   svgEl.setAttribute("preserveAspectRatio", "xMidYMid meet");
-  // Clear any prior content (idempotent re-create).
   while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
 
-  // Two layers: edges beneath nodes so rings sit on top of strokes.
   const edgeLayer = el("g", { class: "edge-layer" });
   const nodeLayer = el("g", { class: "node-layer" });
   svgEl.appendChild(edgeLayer);
   svgEl.appendChild(nodeLayer);
 
-  const edgeViews = new Map(); // edgeId -> { group, line, hit, arrow, offset }
-  const nodeViews = new Map(); // nodeId -> { group, glow, ring, label }
+  const edgeViews = new Map();
+  const nodeViews = new Map();
 
   // --- Build edges -----------------------------------------------------------
   for (const edge of config.level.edges) {
-    const offset = parallelOffset(config.level, edge);
-    const ends = edgeEnds(current, edge.id);
-    const geo = edgeGeometry(current, edge, ends, offset);
+    const curve = edgeCurve(nodeById, edge, parallelBow(config.level, edge));
+    const toEnd = headEnd(edgeEnds(current, edge.id), edge);
 
     const group = el("g", {
       class:
@@ -151,30 +176,16 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
     });
     group.dataset.edge = edge.id;
 
-    const line = el("line", {
-      class: "edge-line",
-      x1: geo.x1,
-      y1: geo.y1,
-      x2: geo.x2,
-      y2: geo.y2,
-    });
-    const arrow = el("path", { class: "edge-arrow", d: arrowPath(geo) });
-    // Fat invisible hit area on top for generous tap/click targets.
-    const hit = el("line", {
-      class: "edge-hit",
-      x1: geo.x1,
-      y1: geo.y1,
-      x2: geo.x2,
-      y2: geo.y2,
-    });
+    const line = el("path", { class: "edge-line", d: curvePath(curve) });
+    const arrow = el("path", { class: "edge-arrow", d: arrowPathFor(curve, toEnd) });
+    const hit = el("path", { class: "edge-hit", d: curvePath(curve) });
 
     group.appendChild(line);
     group.appendChild(arrow);
     group.appendChild(hit);
     edgeLayer.appendChild(group);
 
-    edgeViews.set(edge.id, { group, line, hit, arrow, offset });
-
+    edgeViews.set(edge.id, { group, line, hit, arrow, curve, edge });
     bindTap(hit, () => onEdgeTap && onEdgeTap(edge.id));
   }
 
@@ -183,15 +194,11 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
     const group = el("g", { class: "node-group" });
     group.dataset.node = node.id;
     group.setAttribute("transform", `translate(${node.x} ${node.y})`);
-
-    // Glow sits behind the ring; CSS scales it via --slack.
     const glow = el("circle", { class: "node-glow", r: NODE_R });
     const ring = el("circle", { class: "node-ring", r: NODE_R });
-
     group.appendChild(glow);
     group.appendChild(ring);
     nodeLayer.appendChild(group);
-
     nodeViews.set(node.id, { group, glow, ring });
   }
 
@@ -205,84 +212,64 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
       "touchend",
       (e) => {
         touched = true;
-        e.preventDefault(); // avoid the synthetic click that follows
+        e.preventDefault();
         handler();
-        // reset the guard after the would-be click window
         setTimeout(() => (touched = false), 400);
       },
       { passive: false }
     );
     target.addEventListener("click", () => {
-      if (touched) return; // already handled by touchend
+      if (touched) return;
       handler();
     });
   }
 
   // --- Public view API -------------------------------------------------------
 
-  // Re-render to a new config: animate arrow reversals, pulse changed nodes.
+  // Re-render to a new config: glide arrowheads whose orientation flipped,
+  // pulse nodes whose slack changed. The curve locus never moves.
   function update(nextConfig) {
-    const next = withIndex(nextConfig, nodeById);
-
-    for (const edge of next.level.edges) {
+    for (const edge of nextConfig.level.edges) {
       const view = edgeViews.get(edge.id);
       const prevEnds = edgeEnds(current, edge.id);
-      const nextEnds = edgeEnds(next, edge.id);
-      const reversed =
-        prevEnds.from !== nextEnds.from || prevEnds.to !== nextEnds.to;
-      if (reversed) {
-        animateReversal(view, next, edge);
-      }
+      const nextEnds = edgeEnds(nextConfig, edge.id);
+      if (prevEnds.to !== nextEnds.to) animateReversal(view, prevEnds, nextEnds);
     }
-
-    // Pulse nodes whose slack changed; always refresh slack state.
-    for (const node of next.level.nodes) {
-      const before = nodeSlack(current, node.id);
-      const after = nodeSlack(next, node.id);
-      if (before !== after) pulse(node.id);
+    for (const node of nextConfig.level.nodes) {
+      if (nodeSlack(current, node.id) !== nodeSlack(nextConfig, node.id)) pulse(node.id);
     }
-
-    current = next;
+    current = nextConfig;
     applyNodeState(current, nodeViews);
   }
 
-  function animateReversal(view, next, edge) {
-    const startGeo = edgeGeometry(current, edge, edgeEnds(current, edge.id), view.offset);
-    const endGeo = edgeGeometry(next, edge, edgeEnds(next, edge.id), view.offset);
-
+  function animateReversal(view, prevEnds, nextEnds) {
+    const c = view.curve;
+    const fromT = headEnd(prevEnds, view.edge) === "B" ? 1 : 0;
+    const toT = headEnd(nextEnds, view.edge) === "B" ? 1 : 0;
+    const dirSign = toT > fromT ? 1 : -1;
     const t0 = performance.now();
     function frame(now) {
       const k = Math.min(1, (now - t0) / REVERSAL_MS);
-      // Ease in/out for a deliberate, mechanical "lock turning" feel.
       const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
-      const x1 = startGeo.x1 + (endGeo.x1 - startGeo.x1) * e;
-      const y1 = startGeo.y1 + (endGeo.y1 - startGeo.y1) * e;
-      const x2 = startGeo.x2 + (endGeo.x2 - startGeo.x2) * e;
-      const y2 = startGeo.y2 + (endGeo.y2 - startGeo.y2) * e;
-      const g = { x1, y1, x2, y2, ux: endGeo.ux, uy: endGeo.uy, px: endGeo.px, py: endGeo.py };
-      view.line.setAttribute("x1", x1);
-      view.line.setAttribute("y1", y1);
-      view.line.setAttribute("x2", x2);
-      view.line.setAttribute("y2", y2);
-      view.hit.setAttribute("x1", x1);
-      view.hit.setAttribute("y1", y1);
-      view.hit.setAttribute("x2", x2);
-      view.hit.setAttribute("y2", y2);
-      view.arrow.setAttribute("d", arrowPath(g));
+      view.arrow.setAttribute("d", arrowPathAtT(c, fromT + (toT - fromT) * e, dirSign));
       if (k < 1) requestAnimationFrame(frame);
+      else view.arrow.setAttribute("d", arrowPathFor(c, toT === 1 ? "B" : "A"));
     }
     requestAnimationFrame(frame);
   }
 
-  // Subtle affordance on currently-flippable edges.
+  // Subtle affordance on flippable edges; also raise them so a tap always lands
+  // on a legal edge even where parallels converge near a node.
   function markLegal(edgeIds) {
     const legal = new Set(edgeIds || []);
     for (const [id, view] of edgeViews) {
       view.group.classList.toggle("is-legal", legal.has(id));
     }
+    for (const [id, view] of edgeViews) {
+      if (legal.has(id)) edgeLayer.appendChild(view.group); // raise to top
+    }
   }
 
-  // Short shake + (caller typically) pulses the blocking node.
   function shakeEdge(edgeId) {
     const view = edgeViews.get(edgeId);
     if (!view) return;
@@ -305,11 +292,9 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
     );
   }
 
-  // Restrained win cascade: nodes pulse outward in waves from the target edge.
   function winCascade() {
     svgEl.classList.add("is-won");
-    const order = cascadeOrder(current);
-    order.forEach((nodeId, i) => {
+    cascadeOrder(current).forEach((nodeId, i) => {
       setTimeout(() => pulse(nodeId), i * 90);
     });
   }
@@ -317,17 +302,8 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
   return { update, markLegal, shakeEdge, pulseNode: pulse, winCascade };
 }
 
-// --- helpers operating on a config + our node index --------------------------
+// --- helpers operating on a config -------------------------------------------
 
-// Attach our own node index without mutating the frozen engine config.
-function withIndex(config, nodeById) {
-  if (config.__nodeById) return config;
-  return Object.assign(Object.create(Object.getPrototypeOf(config)), config, {
-    __nodeById: nodeById,
-  });
-}
-
-// Set per-node slack class + the --slack custom property for the glow.
 function applyNodeState(config, nodeViews) {
   for (const [id, view] of nodeViews) {
     const slack = nodeSlack(config, id);
@@ -336,8 +312,7 @@ function applyNodeState(config, nodeViews) {
   }
 }
 
-// Cascade order for the win: start at the target's endpoints, BFS outward over
-// the incidence graph so the pulse radiates from the lock.
+// Win cascade order: BFS outward from the target edge's endpoints.
 function cascadeOrder(config) {
   const level = config.level;
   const targetEdge = config.edgeById.get(level.target);
@@ -360,12 +335,11 @@ function cascadeOrder(config) {
       }
     }
   }
-  // Any disconnected leftovers pulse last.
   for (const n of level.nodes) if (!seen.has(n.id)) order.push(n.id);
   return order;
 }
 
-// Portrait viewBox sized to node extents with uniform padding for glow/arrows.
+// Portrait viewBox sized to node extents, padded for glow, arrows, and bows.
 function computeViewBox(level) {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const n of level.nodes) {
@@ -374,10 +348,6 @@ function computeViewBox(level) {
     if (n.x > maxX) maxX = n.x;
     if (n.y > maxY) maxY = n.y;
   }
-  const pad = NODE_R + ARROW_LEN + 4;
-  const x = minX - pad;
-  const y = minY - pad;
-  const w = maxX - minX + pad * 2;
-  const h = maxY - minY + pad * 2;
-  return `${x} ${y} ${w} ${h}`;
+  const pad = NODE_R + ARROW_LEN + BOW_STEP / 2 + 4;
+  return `${minX - pad} ${minY - pad} ${maxX - minX + pad * 2} ${maxY - minY + pad * 2}`;
 }

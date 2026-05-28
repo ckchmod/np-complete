@@ -130,6 +130,7 @@ html, body {
 .edge-line {
   stroke: var(--c-grey);
   stroke-linecap: round;
+  fill: none;
   transition: stroke var(--transition), opacity var(--transition);
 }
 
@@ -140,8 +141,9 @@ html, body {
 
 .edge-hit {
   stroke: transparent;
-  stroke-width: 8;
+  stroke-width: 6;
   fill: none;
+  pointer-events: stroke;
   cursor: pointer;
 }
 
