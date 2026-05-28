@@ -1,12 +1,10 @@
-// THE LOCK — bootstrap. Tutorial flow then THE LOCK.
+// THE LOCK — bootstrap. Intro -> tutorials -> Rush (Survival).
 
-import { TUTORIALS, THE_LOCK } from "./levels.js";
+import { TUTORIALS } from "./levels.js";
 import { createGame } from "./game.js";
-
-// ── State ─────────────────────────────────────────────────────────────────────
+import { createRush } from "./rush.js";
 
 const STORAGE_TUT_DONE = "the-lock:tutorials-done";
-
 function tutorialsDone() {
   try { return !!localStorage.getItem(STORAGE_TUT_DONE); } catch (_) { return false; }
 }
@@ -15,90 +13,96 @@ function markTutorialsDone() {
 }
 
 // ── DOM refs ─────────────────────────────────────────────────────────────────
+const mountEl  = document.getElementById("app");
+const titleEl  = document.getElementById("level-title");
+const hintEl   = document.getElementById("level-hint");
+const navPrev  = document.getElementById("nav-prev");
+const navNext  = document.getElementById("nav-next");
+const navSkip  = document.getElementById("nav-skip");
+const navLabel = document.getElementById("nav-label");
+const introEl  = document.getElementById("intro");
+const btnStart = document.getElementById("btn-start");
+const btnHelp  = document.getElementById("btn-help");
+const rushOver = document.getElementById("rush-over");
 
-const mountEl   = document.getElementById("app");
-const titleEl   = document.getElementById("level-title");
-const hintEl    = document.getElementById("level-hint");
-const navPrev   = document.getElementById("nav-prev");
-const navNext   = document.getElementById("nav-next");
-const navSkip   = document.getElementById("nav-skip");
-const navLabel  = document.getElementById("nav-label");
-const introEl   = document.getElementById("intro");
-const btnStart  = document.getElementById("btn-start");
-const btnHelp   = document.getElementById("btn-help");
-
-// ── Level sequence ────────────────────────────────────────────────────────────
-
-// Full sequence: 5 tutorials then THE LOCK.
-const LEVELS = [...TUTORIALS, THE_LOCK];
 let currentIndex = 0;
-let currentGame  = null;
+let currentGame = null;
+let rush = null;
+let lastShare = "";
 
-function isTheLock(level) {
-  return level.id === "the-lock";
+function hideResultCard() {
+  const card = document.getElementById("result-card");
+  if (card) { card.classList.remove("visible"); card.classList.add("hidden"); }
 }
 
-// ── Navigation ────────────────────────────────────────────────────────────────
-
+// ── Tutorials ─────────────────────────────────────────────────────────────────
 function goTo(index) {
-  if (index < 0 || index >= LEVELS.length) return;
+  if (index < 0 || index >= TUTORIALS.length) return;
   currentIndex = index;
-  loadLevel(LEVELS[currentIndex]);
+  loadTutorial(TUTORIALS[currentIndex]);
 }
 
-function loadLevel(level) {
-  // Update title and hint
-  if (titleEl)  titleEl.textContent  = level.name;
-  if (hintEl)   hintEl.textContent   = isTheLock(level) ? level.hint : level.hint;
-
-  // Nav buttons
-  if (navPrev)  navPrev.disabled     = currentIndex === 0;
-  if (navNext)  navNext.hidden       = isTheLock(level);
-  if (navSkip)  navSkip.hidden       = isTheLock(level);
-  if (navLabel) navLabel.textContent = isTheLock(level)
-    ? "THE LOCK"
-    : (currentIndex + 1) + " / " + TUTORIALS.length;
-
-  // Hide result card from previous level
-  const resultCard = document.getElementById("result-card");
-  if (resultCard) {
-    resultCard.classList.remove("visible");
-    resultCard.classList.add("hidden");
-  }
-
-  // Tear down the previous session's control-button listeners before making a new one.
+function loadTutorial(level) {
+  if (titleEl) titleEl.textContent = level.name;
+  if (hintEl) hintEl.textContent = level.hint || "";
+  if (navPrev) navPrev.disabled = currentIndex === 0;
+  if (navLabel) navLabel.textContent = currentIndex + 1 + " / " + TUTORIALS.length;
+  hideResultCard();
   if (currentGame) currentGame.destroy();
-
-  // Create game session
   currentGame = createGame({
     level,
     mountEl,
     onWin() {
-      if (isTheLock(level)) return; // result card handles it
-      // For tutorials, auto-advance after a short delay
       setTimeout(() => {
-        if (currentIndex < TUTORIALS.length - 1) {
-          goTo(currentIndex + 1);
-        } else {
-          // All tutorials done: go to THE LOCK
-          markTutorialsDone();
-          goTo(TUTORIALS.length);
-        }
+        if (currentIndex < TUTORIALS.length - 1) goTo(currentIndex + 1);
+        else enterRush();
       }, 1400);
     },
   });
 }
 
-// ── Wire nav buttons ──────────────────────────────────────────────────────────
-
-if (navPrev) navPrev.addEventListener("click", () => goTo(currentIndex - 1));
-if (navNext) navNext.addEventListener("click", () => goTo(currentIndex + 1));
-if (navSkip) navSkip.addEventListener("click", () => {
+// ── Rush ──────────────────────────────────────────────────────────────────────
+function enterRush() {
+  if (currentGame) { currentGame.destroy(); currentGame = null; }
+  if (rush) { rush.destroy(); rush = null; }
   markTutorialsDone();
-  goTo(TUTORIALS.length); // jump straight to THE LOCK
+  hideResultCard();
+  if (rushOver) { rushOver.classList.remove("visible"); rushOver.classList.add("hidden"); }
+  mountEl.classList.add("mode-rush");
+  if (titleEl) titleEl.textContent = "RUSH";
+  if (hintEl) hintEl.textContent = "";
+  const seed = (Math.floor(Math.random() * 0x7fffffff)) >>> 0;
+  rush = createRush({ mountEl, seed, onGameOver: showRushOver });
+}
+
+function showRushOver({ solved, best, isBest, shareText }) {
+  lastShare = shareText;
+  const fs = document.getElementById("rush-final-score");
+  const bestEl = document.getElementById("rush-best");
+  if (fs) fs.textContent = String(solved);
+  if (bestEl) bestEl.textContent = isBest ? "★ new best" : "best " + best;
+  if (rushOver) { rushOver.classList.remove("hidden"); rushOver.classList.add("visible"); }
+}
+
+// ── Nav wiring ──────────────────────────────────────────────────────────────
+if (navPrev) navPrev.addEventListener("click", () => goTo(currentIndex - 1));
+if (navNext) navNext.addEventListener("click", () => {
+  if (currentIndex < TUTORIALS.length - 1) goTo(currentIndex + 1);
+  else enterRush();
+});
+if (navSkip) navSkip.addEventListener("click", enterRush);
+
+const btnRushAgain = document.getElementById("btn-rush-again");
+const btnRushShare = document.getElementById("btn-rush-share");
+if (btnRushAgain) btnRushAgain.addEventListener("click", enterRush);
+if (btnRushShare) btnRushShare.addEventListener("click", () => {
+  if (navigator.clipboard && lastShare) navigator.clipboard.writeText(lastShare).catch(() => {});
+  const o = btnRushShare.textContent;
+  btnRushShare.textContent = "Copied!";
+  setTimeout(() => (btnRushShare.textContent = o), 1500);
 });
 
-// ── Intro / objective overlay ───────────────────────────────────────────────
+// ── Intro / objective overlay ──────────────────────────────────────────────────
 const STORAGE_INTRO_SEEN = "the-lock:intro-seen";
 function hideIntro() { if (introEl) introEl.classList.add("hidden"); }
 function showIntro() { if (introEl) introEl.classList.remove("hidden"); }
@@ -107,17 +111,8 @@ if (btnStart) btnStart.addEventListener("click", () => {
   hideIntro();
 });
 if (btnHelp) btnHelp.addEventListener("click", showIntro);
-// Returning players skip the intro (reopen any time via the ? button).
 try { if (localStorage.getItem(STORAGE_INTRO_SEEN)) hideIntro(); } catch (_) {}
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
-
-// If tutorials already completed, start at THE LOCK directly.
-// Otherwise start from tutorial 1 (or resume at last incomplete).
-if (tutorialsDone()) {
-  currentIndex = TUTORIALS.length;
-} else {
-  currentIndex = 0;
-}
-
-loadLevel(LEVELS[currentIndex]);
+if (tutorialsDone()) enterRush();
+else goTo(0);

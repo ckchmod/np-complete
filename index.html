@@ -15,13 +15,25 @@
     <!-- Top bar -->
     <header id="top-bar">
       <span id="level-title" class="level-title">THE LOCK</span>
-      <div id="hud">
+
+      <!-- Tutorial HUD -->
+      <div id="hud" class="tutorial-only">
         <span id="move-count" class="hud-value">0</span><span class="hud-label"> moves</span>
         <span class="hud-sep">·</span>
         <span id="par-display" class="hud-label">par —</span>
         <span class="hud-sep">·</span>
         <span id="pb-display" class="hud-label pb"></span>
       </div>
+
+      <!-- Rush HUD -->
+      <div id="rush-hud" class="rush-only">
+        <span id="rush-score" class="hud-value">0</span><span class="hud-label"> picked</span>
+        <span class="hud-sep">·</span>
+        <span id="rush-moves" class="hud-label">0 / 0</span>
+        <span class="hud-sep">·</span>
+        <span id="rush-strikes" class="hud-label strikes">···</span>
+      </div>
+
       <button id="btn-help" class="btn-help" aria-label="How to play">?</button>
     </header>
 
@@ -30,45 +42,55 @@
       <svg id="board" class="board" aria-label="puzzle board"></svg>
     </main>
 
-    <!-- Hint -->
-    <p id="level-hint" class="level-hint"></p>
+    <!-- Hint (tutorials) -->
+    <p id="level-hint" class="level-hint tutorial-only"></p>
 
-    <!-- Controls -->
-    <div id="controls">
+    <!-- Tutorial controls -->
+    <div id="controls" class="tutorial-only">
       <button id="btn-undo" class="btn btn-secondary" aria-label="Undo last move">Undo</button>
       <button id="btn-reset" class="btn btn-secondary" aria-label="Reset to start">Reset</button>
     </div>
 
+    <!-- Rush controls -->
+    <div id="rush-controls" class="rush-only">
+      <button id="btn-skip" class="btn btn-secondary" aria-label="Skip this lock (costs a strike)">Skip ✕</button>
+    </div>
+
     <!-- Tutorial navigation -->
-    <nav id="nav-bar">
+    <nav id="nav-bar" class="tutorial-only">
       <button id="nav-prev" class="btn btn-ghost" aria-label="Previous level" disabled>←</button>
       <span id="nav-label" class="nav-label"></span>
       <button id="nav-next" class="btn btn-ghost" aria-label="Next level">→</button>
-      <button id="nav-skip" class="btn btn-ghost nav-skip" aria-label="Skip tutorials">Skip to THE LOCK</button>
+      <button id="nav-skip" class="btn btn-ghost nav-skip" aria-label="Skip tutorials">Skip to Rush</button>
     </nav>
 
-    <!-- Result card (hidden until win) -->
+    <!-- Result card (tutorial win) -->
     <div id="result-card" class="result-card hidden" role="dialog" aria-modal="true" aria-label="Puzzle solved">
       <div class="result-inner">
         <div class="result-stars" id="result-stars">★★★</div>
         <div class="result-title">SOLVED</div>
-        <div class="result-row">
-          <span class="result-label">Moves</span>
-          <span class="result-value" id="result-moves">—</span>
-        </div>
-        <div class="result-row">
-          <span class="result-label">Optimal</span>
-          <span class="result-value" id="result-par">—</span>
-        </div>
-        <div class="result-row">
-          <span class="result-label">Score</span>
-          <span class="result-value" id="result-score">—</span>
-        </div>
+        <div class="result-row"><span class="result-label">Moves</span><span class="result-value" id="result-moves">—</span></div>
+        <div class="result-row"><span class="result-label">Optimal</span><span class="result-value" id="result-par">—</span></div>
+        <div class="result-row"><span class="result-label">Score</span><span class="result-value" id="result-score">—</span></div>
         <div class="result-pb" id="result-pb"></div>
         <div class="result-hash" id="result-hash"></div>
         <div class="result-actions">
           <button id="btn-share" class="btn btn-primary">Copy result</button>
           <button id="btn-play-again" class="btn btn-secondary">Play again</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rush run-over -->
+    <div id="rush-over" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Run over">
+      <div class="overlay-card">
+        <div class="intro-logo">RUN OVER</div>
+        <div class="rush-final" id="rush-final-score">0</div>
+        <div class="rush-final-label">locks picked</div>
+        <div class="result-pb" id="rush-best"></div>
+        <div class="result-actions">
+          <button id="btn-rush-share" class="btn btn-primary">Copy result</button>
+          <button id="btn-rush-again" class="btn btn-secondary">Play again</button>
         </div>
       </div>
     </div>
@@ -92,7 +114,7 @@
 
   <script type="module" src="src/main.js"></script>
   <script>
-    // Wire play-again inside result card (no module needed)
+    // Tutorial result-card "Play again" -> reset (no module needed).
     document.addEventListener('DOMContentLoaded', () => {
       const btn = document.getElementById('btn-play-again');
       const card = document.getElementById('result-card');

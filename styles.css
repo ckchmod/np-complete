@@ -416,6 +416,31 @@ html, body {
 }
 .btn-help:hover { color: var(--c-white); border-color: var(--c-grey); }
 
+/* ── Mode chrome: tutorial vs rush ────────────────────────────────────────── */
+.rush-only { display: none; }
+.mode-rush .tutorial-only { display: none; }
+.mode-rush #rush-hud { display: flex; }
+.mode-rush #rush-controls { display: flex; }
+#rush-hud { align-items: baseline; gap: 6px; }
+#rush-strikes.strikes { color: var(--c-target); letter-spacing: 0.18em; }
+#rush-controls { justify-content: center; }
+.rush-final {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 56px;
+  line-height: 1;
+  color: var(--c-white);
+  margin: 6px 0 2px;
+}
+.rush-final-label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--c-grey);
+  margin-bottom: 14px;
+}
+
 .result-card {
   position: absolute;
   inset: 0;
