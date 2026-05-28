@@ -40,6 +40,7 @@ function goTo(index) {
 }
 
 function loadTutorial(level) {
+  mountEl.classList.remove("mode-rush");
   if (titleEl) titleEl.textContent = level.name;
   if (hintEl) hintEl.textContent = level.hint || "";
   if (navPrev) navPrev.disabled = currentIndex === 0;
@@ -67,7 +68,7 @@ function enterRush() {
   if (rushOver) { rushOver.classList.remove("visible"); rushOver.classList.add("hidden"); }
   mountEl.classList.add("mode-rush");
   if (titleEl) titleEl.textContent = "RUSH";
-  if (hintEl) hintEl.textContent = "";
+  if (hintEl) hintEl.innerHTML = 'Reverse the <span class="intro-red">red</span> arrow · every node needs <b>2</b> pointing in';
   const seed = (Math.floor(Math.random() * 0x7fffffff)) >>> 0;
   rush = createRush({ mountEl, seed, onGameOver: showRushOver });
 }

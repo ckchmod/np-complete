@@ -22,14 +22,15 @@ import { edgeEnds, nodeSlack } from "./engine.js";
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 const NODE_R = 3.2; // node ring radius
-const ARROW_MAX_LEN = 3.6; // longest arrowhead (thick) — for viewBox padding
+const ARROW_MAX_LEN = 4.8; // longest arrowhead (thick) — for viewBox padding
 const ENDPOINT_GAP = NODE_R + 0.8; // stop strokes short of the node ring
 const BOW_STEP = 13; // perpendicular control-point offset between parallels
 const REVERSAL_MS = 300; // arrow reversal animation duration
 
-// Arrowhead size by edge weight: a thick (2) arrow gets a visibly bigger head.
+// Arrowhead size by edge weight: a thick (2) arrow gets a visibly bigger head —
+// clearly wider than its own shaft (stroke 3.2) so weight reads at a glance.
 function arrowDims(w) {
-  return w === 2 ? { len: 3.6, half: 2.3 } : { len: 2.3, half: 1.3 };
+  return w === 2 ? { len: 4.8, half: 3.3 } : { len: 2.4, half: 1.35 };
 }
 
 function el(name, attrs) {

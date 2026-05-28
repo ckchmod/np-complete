@@ -28,24 +28,26 @@ export function makeRng(seed) {
 
 const round1 = (x) => Math.round(x * 10) / 10;
 
-// Force-directed (Fruchterman–Reingold) layout over the graph, fit to the
-// portrait viewBox. Spreads connected nodes and reduces edge crossings so
-// unrelated arrows don't land on top of one another.
-function forceLayout(ids, edges, rng) {
-  const n = ids.length;
-  const index = new Map(ids.map((id, i) => [id, i]));
-  const W = 72, H = 132; // interior box (before offset)
-  const k = 0.9 * Math.sqrt((W * H) / n); // ideal edge length
-  const pos = ids.map(() => ({ x: rng() * W, y: rng() * H }));
-  const pairs = edges.map((e) => [index.get(e.u), index.get(e.v)]);
-  let temp = W / 6;
+const W = 72, H = 116; // interior layout box (slightly less tall than the viewport)
+const FIT = { X0: 14, X1: 86, Y0: 22, Y1: 144 };
 
-  for (let it = 0; it < 160; it++) {
+// One Fruchterman–Reingold relaxation. Seeded from a jittered ring in CYCLE
+// order (cycleIdx[r] = node index placed at ring slot r), so the main loop's
+// edges connect ring-adjacent nodes and start crossing-free; then relaxed.
+function frSimulate(n, pairs, rng, cycleIdx) {
+  const k = 0.95 * Math.sqrt((W * H) / n); // ideal edge length
+  const pos = new Array(n);
+  for (let r = 0; r < n; r++) {
+    const a = (r / n) * Math.PI * 2 + (rng() - 0.5) * 0.8;
+    const rad = (Math.min(W, H) / 2) * (0.66 + rng() * 0.24);
+    pos[cycleIdx[r]] = { x: W / 2 + Math.cos(a) * rad, y: H / 2 + Math.sin(a) * rad };
+  }
+  let temp = W / 6;
+  for (let it = 0; it < 200; it++) {
     const disp = pos.map(() => ({ x: 0, y: 0 }));
     for (let i = 0; i < n; i++) {
       for (let j = i + 1; j < n; j++) {
-        let dx = pos[i].x - pos[j].x;
-        let dy = pos[i].y - pos[j].y;
+        let dx = pos[i].x - pos[j].x, dy = pos[i].y - pos[j].y;
         let dist = Math.hypot(dx, dy);
         if (dist < 0.01) { dx = (rng() - 0.5) * 0.1; dy = (rng() - 0.5) * 0.1; dist = Math.hypot(dx, dy) || 0.01; }
         const f = (k * k) / dist; // repulsion
@@ -54,8 +56,7 @@ function forceLayout(ids, edges, rng) {
       }
     }
     for (const [a, b] of pairs) {
-      let dx = pos[a].x - pos[b].x;
-      let dy = pos[a].y - pos[b].y;
+      let dx = pos[a].x - pos[b].x, dy = pos[a].y - pos[b].y;
       const dist = Math.hypot(dx, dy) || 0.01;
       const f = (dist * dist) / k; // attraction
       disp[a].x -= (dx / dist) * f; disp[a].y -= (dy / dist) * f;
@@ -67,24 +68,77 @@ function forceLayout(ids, edges, rng) {
       pos[i].x = Math.max(0, Math.min(W, pos[i].x + (disp[i].x / dl) * step));
       pos[i].y = Math.max(0, Math.min(H, pos[i].y + (disp[i].y / dl) * step));
     }
-    temp *= 0.97; // cool
+    temp *= 0.975; // cool
   }
+  return fitToBox(pos);
+}
 
-  // Fit + center into the portrait box.
+// Uniformly scale + center a layout into the portrait fit box.
+function fitToBox(pos) {
   let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
   for (const p of pos) {
     minx = Math.min(minx, p.x); miny = Math.min(miny, p.y);
     maxx = Math.max(maxx, p.x); maxy = Math.max(maxy, p.y);
   }
-  const X0 = 14, X1 = 86, Y0 = 18, Y1 = 150;
   const spanx = maxx - minx || 1, spany = maxy - miny || 1;
-  const s = Math.min((X1 - X0) / spanx, (Y1 - Y0) / spany);
-  const offx = X0 + ((X1 - X0) - spanx * s) / 2;
-  const offy = Y0 + ((Y1 - Y0) - spany * s) / 2;
+  const s = Math.min((FIT.X1 - FIT.X0) / spanx, (FIT.Y1 - FIT.Y0) / spany);
+  const offx = FIT.X0 + ((FIT.X1 - FIT.X0) - spanx * s) / 2;
+  const offy = FIT.Y0 + ((FIT.Y1 - FIT.Y0) - spany * s) / 2;
+  return pos.map((p) => ({ x: offx + (p.x - minx) * s, y: offy + (p.y - miny) * s }));
+}
+
+function segmentsCross(a, b, c, d) {
+  const o = (p, q, r) => Math.sign((q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x));
+  return o(a, b, c) !== o(a, b, d) && o(c, d, a) !== o(c, d, b);
+}
+function pointSegDist(p, a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y, L2 = dx * dx + dy * dy || 1;
+  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / L2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p.x - (a.x + dx * t), p.y - (a.y + dy * t));
+}
+// Lower is better: crossings dominate, then edges grazing non-incident nodes,
+// then cramped node pairs. Drives the multi-start selection below.
+function layoutScore(n, pairs, pos) {
+  let cross = 0, graze = 0, cramped = 0;
+  for (let i = 0; i < pairs.length; i++) {
+    for (let j = i + 1; j < pairs.length; j++) {
+      const [a, b] = pairs[i], [c, d] = pairs[j];
+      if (a === c || a === d || b === c || b === d) continue;
+      if (segmentsCross(pos[a], pos[b], pos[c], pos[d])) cross++;
+    }
+  }
+  for (const [a, b] of pairs) {
+    for (let v = 0; v < n; v++) {
+      if (v === a || v === b) continue;
+      if (pointSegDist(pos[v], pos[a], pos[b]) < 7) graze++;
+    }
+  }
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      if (Math.hypot(pos[i].x - pos[j].x, pos[i].y - pos[j].y) < 11) cramped++;
+    }
+  }
+  return cross * 100 + graze * 45 + cramped * 12;
+}
+
+// Multi-start force layout: generation is sub-ms, so run several relaxations and
+// keep the most readable (fewest crossings / grazes / cramped pairs). `order` is
+// the node ids in cycle order, used to seed each start crossing-free.
+function forceLayout(ids, edges, rng, order) {
+  const n = ids.length;
+  const index = new Map(ids.map((id, i) => [id, i]));
+  const pairs = edges.map((e) => [index.get(e.u), index.get(e.v)]);
+  const cycleIdx = order.map((id) => index.get(id));
+  let best = null, bestScore = Infinity;
+  for (let start = 0; start < 16; start++) {
+    const pos = frSimulate(n, pairs, rng, cycleIdx);
+    const score = layoutScore(n, pairs, pos);
+    if (score < bestScore) { bestScore = score; best = pos; }
+    if (bestScore === 0) break; // perfect: no crossings, grazes, or cramping
+  }
   const out = {};
-  ids.forEach((id, i) => {
-    out[id] = { x: round1(offx + (pos[i].x - minx) * s), y: round1(offy + (pos[i].y - miny) * s) };
-  });
+  ids.forEach((id, i) => { out[id] = { x: round1(best[i].x), y: round1(best[i].y) }; });
   return out;
 }
 
@@ -98,7 +152,7 @@ export function chainLength(d) {
 export function generateLock(difficulty, rng) {
   const d = Math.max(1, Math.floor(difficulty));
   const k = chainLength(d);
-  const decoyCount = Math.max(0, Math.min(3, d - 3));
+  const decoyCount = Math.max(1, Math.min(4, d - 1));
 
   const chain = [];
   for (let i = 0; i <= k; i++) chain.push("c" + i);
@@ -129,7 +183,10 @@ export function generateLock(difficulty, rng) {
   // Decoys: tight, ground-fed red herrings; never feed the chain.
   for (const dn of decoys) add("g1", dn, 2, "uv");
 
-  const pos = forceLayout(allIds, edges, rng);
+  // Ring order following the actual cycle (g1-x-chain-y-g2), decoys appended as
+  // pendants near g1 — seeds a crossing-free layout.
+  const order = ["g1", "x", ...chain, "y", "g2", ...decoys];
+  const pos = forceLayout(allIds, edges, rng, order);
   const nodes = allIds.map((id) => ({ id, x: pos[id].x, y: pos[id].y }));
 
   const level = { id: "lock-d" + d, name: "Lock", nodes, edges, target: targetId };
