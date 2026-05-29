@@ -15,12 +15,14 @@ Shipped + pushed to `main` (8 milestones, 47/47 tests, working tree clean & in s
 - **F** robustness — cascade/win timer teardown via `board.destroy()` + game `destroyed` guard. F2 skipped: the review proved the proposed solver state-cap a no-op (BFS visits ~7.5k states) — `5603d6a`.
 - **E** visual polish — stronger legal glow, slow red target-breathe, overlay fade + card-rise, run-over score count-up, richer end screen (total moves, vs-best delta) — `6495930`.
 
-NOT YET BUILT (onboarding tail):
-- **C2** Rush-rules interstitial at the tutorial→Rush handoff (§4).
-- **C3** context-aware "?" help in Rush (§4).
-- **Shuttle tutorial** (audit finding 7): Rush introduces the lend/reclaim backtracking gadget at d≥8 untaught — add a 6th tutorial to `src/levels.js` (verify par + backtracking via the solver; `test/levels.test.js` asserts par), or delay/limit shuttle in Rush.
+Onboarding tail — SHIPPED (Direction A, one reviewed commit `43ab98a`, 47/47):
+- **Shuttle tutorial** `tut-6` "Lend & Reclaim" — a minimal solver-verified shuttle (6 nodes/10 edges, par 7, target blocked move 1, `backtrackingRequired`, crossing-free layout); route `ST KS KD SK ST TS KT`. `test/levels.test.js` counts bumped 5→6 / 6→7.
+- **C2** Rush-rules overlay `#rush-intro` at the tutorial→Rush handoff (budget · 3 lives · skip).
+- **C3** context-aware "?" — Rush rules in a run, how-to-play in tutorials. One overlay serves both.
+- Pre-launch review (5-angle Workflow) fixes folded in: `?` mid-run **pauses** the run (`rush.pause/resume` — in-flight transition can't fire behind the modal); leftover result-card cleared on handoff; button role derived from `mode-rush` (dropped `pendingRushStart`); 1400ms handoff timer cancelled on nav.
+- Deferred (pre-existing, not regressions; flagged for `/code-review ultra`): overlay focus-trap/Escape a11y across all 3 overlays; a `showOverlay/hideOverlay` helper; a pause/resume unit test (skipped — `createRush` is DOM-bound, project is zero-dep).
 
-LAUNCH GATE (user-triggered, unchanged): user runs `/code-review ultra` → address findings → make the repo **public** + enable **GitHub Pages**. The two open directions at the 2026-05-29 checkpoint were: (A) finish the onboarding tail first, or (B) launch now and finish onboarding after.
+LAUNCH GATE (Direction B, NOW ACTIVE): user runs `/code-review ultra` → Claude addresses findings → make the repo **public** + enable **GitHub Pages** (https://ckchmod.github.io/np-complete/, `main` root; asset paths already relative). The public+Pages flip is the user's explicit, irreversible trigger.
 
 ## 0. Goal & sequencing
 
