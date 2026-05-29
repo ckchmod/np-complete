@@ -173,11 +173,11 @@ html, body {
 /* Legal (flippable) affordance. Excludes the red target: the target is already
    signalled by its colour, and a cyan glow hugging the red arrow read as a
    confusing "cyan under the red". */
-.edge-group.is-legal:not(.is-target) { filter: drop-shadow(0 0 2px var(--c-legal)); }
+.edge-group.is-legal:not(.is-target) { filter: drop-shadow(0 0 4px var(--c-legal)); }
 
 /* Dim non-legal edges (applied to the whole group so the line and head don't
    double-composite into a darker sliver where they meet). */
-.board:not(.no-legal) .edge-group:not(.is-legal):not(.is-target) { opacity: 0.3; }
+.board:not(.no-legal) .edge-group:not(.is-legal):not(.is-target) { opacity: 0.22; }
 
 /* Shake animation for illegal tap */
 @keyframes shake {
@@ -263,6 +263,13 @@ html, body {
 .board.is-won .edge-group.is-target .edge-line  { stroke: var(--c-win); }
 .board.is-won .edge-group.is-target .edge-arrow { fill: var(--c-win); }
 .board.is-won .edge-ghost { opacity: 0; }
+
+/* Draw the eye to the red target with a slow breathe (stops once solved). */
+@keyframes target-breathe {
+  0%, 100% { filter: drop-shadow(0 0 1px var(--c-target)); }
+  50%      { filter: drop-shadow(0 0 5px var(--c-target)); }
+}
+.board:not(.is-won) .edge-group.is-target { animation: target-breathe 2.4s ease-in-out infinite; }
 
 /* ── Hint ─────────────────────────────────────────────────────────────────── */
 
@@ -383,6 +390,12 @@ html, body {
   padding: 28px 24px;
   text-align: center;
 }
+
+/* Overlays (intro / run-over) fade in and the card rises, instead of popping. */
+@keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes card-rise { from { opacity: 0; transform: translateY(12px) scale(0.98); } to { opacity: 1; transform: none; } }
+.overlay:not(.hidden) { animation: overlay-in 0.25s ease; }
+.overlay:not(.hidden) .overlay-card { animation: card-rise 0.3s cubic-bezier(0.22, 1, 0.36, 1); }
 .intro-logo {
   font-family: var(--font-label);
   font-weight: 700;
@@ -622,6 +635,9 @@ html, body {
    slide animations and near-instant all transitions. (JS rAF tweens are gated
    separately in render.js via matchMedia.) */
 @media (prefers-reduced-motion: reduce) {
+  .board:not(.is-won) .edge-group.is-target,
+  .overlay:not(.hidden),
+  .overlay:not(.hidden) .overlay-card,
   .edge-group.is-shaking,
   .node-group.is-pulsing .node-ring,
   .node-group.is-win-pulsing .node-ring,

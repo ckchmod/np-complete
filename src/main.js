@@ -74,13 +74,32 @@ function enterRush() {
   rush = createRush({ mountEl, seed, onGameOver: showRushOver });
 }
 
-function showRushOver({ solved, best, isBest, shareText }) {
+function showRushOver({ solved, best, prevBest, isBest, totalMoves, shareText }) {
   lastShare = shareText;
   const fs = document.getElementById("rush-final-score");
   const bestEl = document.getElementById("rush-best");
-  if (fs) fs.textContent = String(solved);
-  if (bestEl) bestEl.textContent = isBest ? "★ new best" : "best " + best;
+  const statsEl = document.getElementById("rush-stats");
+  if (statsEl) statsEl.textContent = (totalMoves || 0) + " move" + (totalMoves === 1 ? "" : "s") + " total";
+  if (bestEl) {
+    bestEl.textContent = isBest ? "★ new best!"
+      : prevBest > 0 ? (solved === prevBest ? "matched your best" : (prevBest - solved) + " from your best")
+      : "best " + best;
+  }
   if (rushOver) { rushOver.classList.remove("hidden"); rushOver.classList.add("visible"); }
+  if (fs) countUp(fs, solved);
+}
+
+// Count a number up to `to` (skipped under reduced motion).
+function countUp(el, to) {
+  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduce || to <= 0) { el.textContent = String(to); return; }
+  const dur = Math.min(800, 150 + to * 55);
+  const t0 = performance.now();
+  (function step(now) {
+    const k = Math.min(1, (now - t0) / dur);
+    el.textContent = String(Math.round(to * (1 - Math.pow(1 - k, 2))));
+    if (k < 1) requestAnimationFrame(step);
+  })(performance.now());
 }
 
 // ── Nav wiring ──────────────────────────────────────────────────────────────

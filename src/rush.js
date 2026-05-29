@@ -49,6 +49,7 @@ export function createRush({ mountEl, seed, onGameOver }) {
 
   const rng = makeRng(seed >>> 0);
   let solved = 0;
+  let totalMoves = 0; // cumulative moves across solved locks (end-screen stat)
   let strikes = 0;
   let level = null;
   let config = null;
@@ -125,6 +126,7 @@ export function createRush({ mountEl, seed, onGameOver }) {
 
     if (isSolved(config)) {
       solved++;
+      totalMoves += moves;
       locked = true;
       board.winCascade();
       updateHUD();
@@ -156,10 +158,10 @@ export function createRush({ mountEl, seed, onGameOver }) {
     saveBest(best);
     const shareText =
       "THE LOCK — Rush\nPicked " + solved + " lock" + (solved === 1 ? "" : "s") +
-      " 🔒\n(best " + best + ")";
+      " 🔒\n" + totalMoves + " moves · best " + best;
     // new best only when you STRICTLY beat your prior best (not on a tie, and
     // not on a 0-pick first run where prevBest is also 0)
-    if (onGameOver) onGameOver({ solved, best, isBest: solved > prevBest, shareText });
+    if (onGameOver) onGameOver({ solved, best, prevBest, isBest: solved > prevBest, totalMoves, shareText });
   }
 
   function onSkip() {
