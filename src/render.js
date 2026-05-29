@@ -321,7 +321,13 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
     });
   }
 
-  return { update, markLegal, shakeEdge, pulseNode: pulse, winCascade };
+  // Drop the win styling (target back to red, ghost back) without rebuilding —
+  // for an in-place reset() after a win.
+  function clearWin() {
+    svgEl.classList.remove("is-won");
+  }
+
+  return { update, markLegal, shakeEdge, pulseNode: pulse, winCascade, clearWin };
 }
 
 // --- helpers operating on a config -------------------------------------------

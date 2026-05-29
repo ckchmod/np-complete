@@ -94,7 +94,9 @@ function saveBest(levelId, record) {
 
 function computeScore(moves, par, elapsedMs, undos) {
   const timePenalty = Math.floor(elapsedMs / 10000); // 1 point per 10 s
-  return Math.max(0, 1000 - 10 * (moves - par) - timePenalty - 2 * undos);
+  // 1000 is the ceiling (an optimal, instant, undo-free solve); the min guards a
+  // corrupt resume whose restored move count is somehow below par.
+  return Math.max(0, Math.min(1000, 1000 - 10 * (moves - par) - timePenalty - 2 * undos));
 }
 
 function computeStars(moves, par) {
@@ -324,6 +326,7 @@ export function createGame({ level, mountEl, onWin }) {
     config = startConfig;
     clearProgress(level.id);
     board.update(config);
+    board.clearWin(); // a reset after a win must drop the win colour (target back to red)
     refreshLegal();
     updateHUD();
   }

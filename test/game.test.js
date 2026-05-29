@@ -276,8 +276,12 @@ test("render: a fresh board clears a stale is-won (next target stays red)", asyn
     const { createBoard } = await import("../src/render.js");
     const svg = fakeEl();
     svg.classList.add("is-won"); // simulate the previous lock having been solved
-    createBoard(svg, makeConfig(tut1), {}); // build the next lock on the same <svg>
-    assert.equal(svg.classList.contains("is-won"), false, "stale win state must be cleared");
+    const board = createBoard(svg, makeConfig(tut1), {}); // build the next lock on the same <svg>
+    assert.equal(svg.classList.contains("is-won"), false, "stale win state must be cleared on (re)build");
+    // clearWin() — used by game.js reset() after a win — drops the class in place:
+    svg.classList.add("is-won");
+    board.clearWin();
+    assert.equal(svg.classList.contains("is-won"), false, "clearWin() drops the win colour");
   } finally {
     globalThis.document = prevDoc;
     globalThis.requestAnimationFrame = prevRaf;

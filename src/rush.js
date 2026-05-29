@@ -54,6 +54,7 @@ export function createRush({ mountEl, seed, onGameOver }) {
   let budget = 0;
   let locked = false; // input frozen during solve/strike transitions
   let over = false;
+  let pending = null; // the one in-flight transition timer (solve/strike -> next)
 
   function generate(d) {
     for (let i = 0; i < 8; i++) {
@@ -75,7 +76,9 @@ export function createRush({ mountEl, seed, onGameOver }) {
   }
 
   function loadNext() {
+    if (over) return; // a stale delayed timer must not rebuild a finished run
     level = generate(difficultyFor(solved));
+    if (!level) { strike(); return; } // generation failed (shouldn't happen) — strike, don't crash
     config = makeConfig(level);
     moves = 0;
     budget = moveBudget(level.par);
@@ -104,7 +107,7 @@ export function createRush({ mountEl, seed, onGameOver }) {
       locked = true;
       board.winCascade();
       updateHUD();
-      setTimeout(loadNext, SOLVE_DELAY);
+      pending = setTimeout(loadNext, SOLVE_DELAY);
     } else if (moves >= budget) {
       strike();
     }
@@ -116,20 +119,23 @@ export function createRush({ mountEl, seed, onGameOver }) {
     locked = true;
     renderStrikes();
     if (strikes >= STRIKES_MAX) {
-      setTimeout(gameOver, STRIKE_DELAY);
+      pending = setTimeout(gameOver, STRIKE_DELAY);
     } else {
-      setTimeout(loadNext, STRIKE_DELAY);
+      pending = setTimeout(loadNext, STRIKE_DELAY);
     }
   }
 
   function gameOver() {
     over = true;
-    const best = Math.max(loadBest(), solved);
+    const prevBest = loadBest();
+    const best = Math.max(prevBest, solved);
     saveBest(best);
     const shareText =
       "THE LOCK — Rush\nPicked " + solved + " lock" + (solved === 1 ? "" : "s") +
       " 🔒\n(best " + best + ")";
-    if (onGameOver) onGameOver({ solved, best, isBest: solved >= best, shareText });
+    // new best only when you STRICTLY beat your prior best (not on a tie, and
+    // not on a 0-pick first run where prevBest is also 0)
+    if (onGameOver) onGameOver({ solved, best, isBest: solved > prevBest, shareText });
   }
 
   function onSkip() {
@@ -144,6 +150,8 @@ export function createRush({ mountEl, seed, onGameOver }) {
 
   return {
     destroy() {
+      over = true; // stop any in-flight transition from acting on a dead run
+      if (pending) { clearTimeout(pending); pending = null; }
       if (btnSkip) btnSkip.removeEventListener("click", onSkip);
     },
     get score() { return solved; },
