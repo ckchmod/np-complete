@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 
 function fakeEl(id = "") {
   const children = [];
@@ -91,7 +92,7 @@ function installEnv() {
   const ids = [
     "app", "level-title", "level-hint", "nav-prev", "nav-next", "nav-skip", "nav-label",
     "intro", "btn-start", "btn-skip-tutorial", "btn-help", "rush-over", "rush-intro",
-    "btn-rush-start", "mode-select", "rush-mode-button", "battle-mode-button", "battle-board",
+    "btn-rush-start", "battle-intro", "btn-battle-close", "mode-select", "rush-mode-button", "battle-mode-button", "battle-board",
     "battle-turn", "battle-status", "battle-result", "board", "rush-score", "rush-strikes",
     "rush-moves", "btn-skip", "rush-toast", "move-count", "par-display", "result-card",
     "result-moves", "result-par", "result-stars", "result-score", "result-pb", "result-hash",
@@ -99,7 +100,7 @@ function installEnv() {
     "btn-rush-again", "btn-rush-share"
   ];
   for (const id of ids) elements.set(id, fakeEl(id));
-  for (const id of ["rush-over", "rush-intro", "mode-select", "battle-result", "result-card"]) {
+  for (const id of ["rush-over", "rush-intro", "battle-intro", "mode-select", "battle-result", "result-card"]) {
     elements.get(id).classList.add("hidden");
   }
 
@@ -164,4 +165,47 @@ test("main: mode selection appears and launches Rush and Battle paths", async ()
   } finally {
     env.restore();
   }
+});
+
+test("main: help button routes to Battle rules and preserves other help flows", async () => {
+  const env = installEnv();
+  try {
+    const { TUTORIALS } = await import("../src/levels.js");
+    await import(`../src/main.js?battle-help-${Date.now()}`);
+
+    env.el("btn-start").click();
+    env.el("btn-help").click();
+    assert.equal(env.el("intro").classList.contains("hidden"), false, "tutorial help still opens the original intro overlay");
+    assert.equal(env.el("rush-intro").classList.contains("hidden"), true, "tutorial help does not open Rush rules");
+    assert.equal(env.el("battle-intro").classList.contains("hidden"), true, "tutorial help does not open Battle rules");
+    env.el("btn-start").click();
+
+    for (let step = 0; step < TUTORIALS.length; step++) env.el("nav-next").click();
+    env.el("battle-mode-button").click();
+    env.el("btn-help").click();
+    assert.equal(env.el("battle-intro").classList.contains("hidden"), false, "Battle help opens the Battle rules overlay");
+    assert.equal(env.el("intro").classList.contains("hidden"), true, "Battle help keeps tutorial intro closed");
+    assert.equal(env.el("rush-intro").classList.contains("hidden"), true, "Battle help keeps Rush rules closed");
+
+    env.el("btn-battle-close").click();
+    assert.equal(env.el("battle-intro").classList.contains("hidden"), true, "Battle rules close from the overlay button");
+    assert.equal(env.el("app").classList.contains("mode-battle"), true, "closing Battle help keeps Battle active");
+
+    env.el("rush-mode-button").click();
+    env.el("btn-help").click();
+    assert.equal(env.el("rush-intro").classList.contains("hidden"), false, "Rush help still opens Rush rules");
+    assert.equal(env.el("battle-intro").classList.contains("hidden"), true, "Rush help does not open Battle rules");
+  } finally {
+    env.restore();
+  }
+});
+
+test("index: Battle rules copy covers the required short rules", async () => {
+  const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
+
+  assert.match(html, /Players take turns/);
+  assert.match(html, /Flip your own edges, or neutral edges when the current rules allow them/);
+  assert.match(html, /limited charges/);
+  assert.match(html, /Reverse your .*target.* edge to win/);
+  assert.match(html, /No legal move on your turn means you lose/);
 });

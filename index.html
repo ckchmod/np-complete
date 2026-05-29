@@ -126,6 +126,25 @@
       </div>
     </div>
 
+    <!-- Battle rules: reached from "?" while Battle is active. -->
+    <div id="battle-intro" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Battle rules">
+      <div class="overlay-card">
+        <div class="intro-logo">BATTLE</div>
+        <p class="intro-goal">Win your target before the rival wins theirs.</p>
+        <ul class="intro-rules battle-rules">
+          <li><b>Players take turns.</b> White moves first.</li>
+          <li>Flip your own edges, or neutral edges when the current rules allow them.</li>
+          <li>Each edge has <b>limited charges</b>; spent edges cannot move.</li>
+          <li>Reverse your <span class="intro-red">target</span> edge to win.</li>
+          <li>No legal move on your turn means you lose.</li>
+        </ul>
+        <p class="intro-foot">Local hot-seat: pass the phone after each legal flip.</p>
+        <div class="result-actions">
+          <button id="btn-battle-close" class="btn btn-primary">Back to battle</button>
+        </div>
+      </div>
+    </div>
+
     <div id="mode-select" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Choose game mode">
       <div class="overlay-card mode-card">
         <div class="intro-logo">CHOOSE MODE</div>

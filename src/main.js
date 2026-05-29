@@ -25,6 +25,8 @@ const btnHelp  = document.getElementById("btn-help");
 const rushOver = document.getElementById("rush-over");
 const rushIntro = document.getElementById("rush-intro");
 const btnRushStart = document.getElementById("btn-rush-start");
+const battleIntro = document.getElementById("battle-intro");
+const btnBattleClose = document.getElementById("btn-battle-close");
 const modeSelect = document.getElementById("mode-select");
 const btnRushMode = document.getElementById("rush-mode-button");
 const btnBattleMode = document.getElementById("battle-mode-button");
@@ -54,7 +56,7 @@ function clearHandoff() {
 // True while any full-screen modal overlay is open — used to stop a second
 // overlay (or an auto-advance) from appearing on top of an open one.
 function anyOverlayOpen() {
-  return [introEl, rushIntro, rushOver, modeSelect].some((el) => el && !el.classList.contains("hidden"));
+  return [introEl, rushIntro, battleIntro, rushOver, modeSelect].some((el) => el && !el.classList.contains("hidden"));
 }
 
 // ── Tutorials ─────────────────────────────────────────────────────────────────
@@ -109,6 +111,7 @@ function showModeSelect() {
   destroyRush();
   destroyBattle();
   if (rushIntro) rushIntro.classList.add("hidden");
+  if (battleIntro) battleIntro.classList.add("hidden");
   if (rushOver) { rushOver.classList.remove("visible"); rushOver.classList.add("hidden"); }
   if (battleResult) { battleResult.textContent = ""; battleResult.classList.add("hidden"); }
   mountEl.classList.remove("mode-rush", "mode-battle");
@@ -127,6 +130,7 @@ function enterBattle() {
   hideResultCard();
   hideModeSelect();
   if (rushIntro) rushIntro.classList.add("hidden");
+  if (battleIntro) battleIntro.classList.add("hidden");
   if (rushOver) { rushOver.classList.remove("visible"); rushOver.classList.add("hidden"); }
   if (battleResult) { battleResult.textContent = ""; battleResult.classList.add("hidden"); }
   mountEl.classList.remove("mode-rush");
@@ -157,6 +161,7 @@ function enterRush() {
   markTutorialsDone();
   hideResultCard();
   if (rushOver) { rushOver.classList.remove("visible"); rushOver.classList.add("hidden"); }
+  if (battleIntro) battleIntro.classList.add("hidden");
   hideModeSelect();
   mountEl.classList.remove("mode-battle");
   mountEl.classList.add("mode-rush");
@@ -212,6 +217,16 @@ if (btnRushStart) btnRushStart.addEventListener("click", () => {
   else enterRush();                                                         // gate: start a fresh run
 });
 
+// ── Battle rules overlay ──────────────────────────────────────────────────────
+function showBattleRules() {
+  clearHandoff();
+  hideResultCard();
+  if (battleIntro) battleIntro.classList.remove("hidden");
+}
+if (btnBattleClose) btnBattleClose.addEventListener("click", () => {
+  if (battleIntro) battleIntro.classList.add("hidden");
+});
+
 // ── Nav wiring ──────────────────────────────────────────────────────────────
 if (navPrev) navPrev.addEventListener("click", () => goTo(currentIndex - 1));
 if (navNext) navNext.addEventListener("click", () => {
@@ -255,6 +270,7 @@ if (btnSkipTutorial) btnSkipTutorial.addEventListener("click", () => {
 if (btnHelp) btnHelp.addEventListener("click", () => {
   if (anyOverlayOpen()) return; // an overlay is already up — don't stack a second one
   if (mountEl.classList.contains("mode-rush")) showRushRules(false);
+  else if (mountEl.classList.contains("mode-battle")) showBattleRules();
   else showIntro();
 });
 try { if (localStorage.getItem(STORAGE_INTRO_SEEN)) hideIntro(); } catch (_) {}

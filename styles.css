@@ -570,6 +570,7 @@ html, body {
 }
 .intro-rules li { margin-bottom: 8px; }
 .intro-rules b { color: var(--c-white); font-weight: 500; }
+.battle-rules li::marker { color: var(--c-legal); }
 .intro-foot {
   font-family: var(--font-mono);
   font-size: 12px;
