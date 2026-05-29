@@ -192,11 +192,13 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
     const hit = el("path", { class: "edge-hit", d: curvePath(curve) });
 
     if (config.level.target === edge.id) {
-      // Ghost marker: a faint arrowhead at the GOAL end (the reverse of the start
-      // direction) so the player can SEE where the red arrow must end up. Drawn
-      // first, behind the live line/arrow, which covers it once the target flips.
-      const goalEnd = edge.dir === "uv" ? "A" : "B";
-      const ghost = el("path", { class: "edge-ghost", d: arrowPathFor(curve, goalEnd, dim.len, dim.half) });
+      // Ghost marker: a faint DASHED RING around the GOAL node (the end the target
+      // must point INTO after reversal) so the player sees where the bolt lands. A
+      // ring reads as a destination, NOT a second arrowhead — the old arrowhead
+      // ghost looked like a double-headed red arrow. Fades on win (.board.is-won).
+      const goalNodeId = edge.dir === "uv" ? edge.u : edge.v;
+      const gn = nodeById.get(goalNodeId);
+      const ghost = el("circle", { class: "edge-ghost", cx: gn.x, cy: gn.y, r: NODE_R + 2.8 });
       group.appendChild(ghost);
     }
     group.appendChild(line);

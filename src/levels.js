@@ -18,10 +18,13 @@ export const TUTORIALS = [
   {
     id: "tut-1", name: "Tutorial 1 — Flip", par: 1,
     nodes: [
-      { id: "a", x: 28, y: 35 },
-      { id: "b", x: 72, y: 35 },
-      { id: "c", x: 50, y: 70 },
-      { id: "d", x: 50, y: 12 },
+      // Staple layout: the a<->b target pair sits up top, c hangs below b, and the
+      // c<->d battery pair is pulled out to the right — so nothing crosses the red
+      // arrow (the old diamond ran the c<->d pair straight through the middle).
+      { id: "a", x: 22, y: 34 },
+      { id: "b", x: 60, y: 34 },
+      { id: "c", x: 60, y: 70 },
+      { id: "d", x: 92, y: 70 },
     ],
     edges: [
       { id: "e0", u: "a", v: "b", w: 2, dir: "uv" }, // TARGET a->b

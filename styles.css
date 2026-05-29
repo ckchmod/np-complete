@@ -157,19 +157,22 @@ html, body {
 .edge-group.is-target .edge-line  { stroke: var(--c-target); }
 .edge-group.is-target .edge-arrow { fill: var(--c-target); }
 
-/* Ghost goal marker: a faint red arrowhead at the end the target must point to,
-   so "reverse the red arrow" is visible — you can see where it has to end up. */
+/* Ghost goal marker: a faint DASHED RING around the node the red target must
+   point into after reversal — shows the destination without looking like a
+   second arrowhead. */
 .edge-ghost {
   fill: none;
   stroke: var(--c-target);
-  stroke-width: 0.7;
-  stroke-linejoin: round;
-  opacity: 0.6;
+  stroke-width: 0.8;
+  stroke-dasharray: 1.6 1.4;
+  opacity: 0.7;
   transition: opacity var(--transition);
 }
 
-/* Legal (flippable) affordance */
-.edge-group.is-legal { filter: drop-shadow(0 0 2px var(--c-legal)); }
+/* Legal (flippable) affordance. Excludes the red target: the target is already
+   signalled by its colour, and a cyan glow hugging the red arrow read as a
+   confusing "cyan under the red". */
+.edge-group.is-legal:not(.is-target) { filter: drop-shadow(0 0 2px var(--c-legal)); }
 
 /* Dim non-legal edges (applied to the whole group so the line and head don't
    double-composite into a darker sliver where they meet). */
