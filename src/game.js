@@ -168,6 +168,8 @@ export function createGame({ level, mountEl, onWin }) {
   let undoCount = 0;
   let startTime = Date.now();
   let won = false;
+  let destroyed = false; // set by destroy(); deferred callbacks bail if true
+  let winTimer = null;   // the 900ms result-card timer, cleared on destroy
   let finalShareString = "";
 
   // Total moves counted toward the solve = moves restored on resume + this
@@ -275,7 +277,8 @@ export function createGame({ level, mountEl, onWin }) {
     board.winCascade();
 
     // Show result card
-    setTimeout(() => {
+    winTimer = setTimeout(() => {
+      if (destroyed) return; // a destroyed/rebuilt game must not fire its stale win timer
       if (resultCard) {
         if (resultMovesEl) resultMovesEl.textContent = moves;
         if (resultParEl) resultParEl.textContent = level.par;
@@ -368,6 +371,9 @@ export function createGame({ level, mountEl, onWin }) {
   // Remove this session's listeners on the persistent control buttons so they
   // don't accumulate across level changes (main.js calls this before reloading).
   function destroy() {
+    destroyed = true;
+    if (winTimer) { clearTimeout(winTimer); winTimer = null; }
+    if (board && board.destroy) board.destroy();
     if (btnUndo) btnUndo.removeEventListener("click", undo);
     if (btnReset) btnReset.removeEventListener("click", reset);
     if (btnShare) btnShare.removeEventListener("click", share);

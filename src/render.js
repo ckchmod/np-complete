@@ -333,6 +333,7 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
   // colour (cyan), so an illegal tap looked like a solve.
   function pulse(nodeId) { pulseClass(nodeId, "is-pulsing"); }
 
+  let cascadeTimers = []; // tracked so destroy() can cancel a cascade mid-flight
   function winCascade() {
     svgEl.classList.add("is-won"); // win colour applies via .board.is-won regardless
     if (prefersReducedMotion()) return; // skip the staggered pulse cascade
@@ -340,7 +341,7 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
     // Clamp the per-node stagger so the whole cascade finishes within the
     // post-solve delay even on big boards (a fixed 90ms overran and got cut off).
     const step = Math.min(90, Math.floor(360 / Math.max(1, order.length - 1)));
-    order.forEach((nodeId, i) => setTimeout(() => pulseClass(nodeId, "is-win-pulsing"), i * step));
+    order.forEach((nodeId, i) => cascadeTimers.push(setTimeout(() => pulseClass(nodeId, "is-win-pulsing"), i * step)));
   }
 
   // Brief red flash + shake on the whole board when a life is lost — the most
@@ -356,7 +357,14 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
     svgEl.classList.remove("is-won");
   }
 
-  return { update, markLegal, shakeEdge, pulseNode: pulse, winCascade, clearWin, strikeFlash };
+  // Cancel any in-flight win-cascade timers — called before a rebuild / on
+  // teardown so late pulses don't fire against the next board's nodes.
+  function destroy() {
+    cascadeTimers.forEach(clearTimeout);
+    cascadeTimers = [];
+  }
+
+  return { update, markLegal, shakeEdge, pulseNode: pulse, winCascade, clearWin, strikeFlash, destroy };
 }
 
 // --- helpers operating on a config -------------------------------------------

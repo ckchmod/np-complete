@@ -102,6 +102,7 @@ export function createRush({ mountEl, seed, onGameOver }) {
     config = makeConfig(level);
     moves = 0;
     budget = moveBudget(level.par);
+    if (board) board.destroy(); // cancel the previous board's cascade timers before rebuild
     board = createBoard(svgEl, config, { onEdgeTap: handleTap });
     board.markLegal(legalFlips(config));
     locked = false;
@@ -177,6 +178,7 @@ export function createRush({ mountEl, seed, onGameOver }) {
       over = true; // stop any in-flight transition from acting on a dead run
       if (pending) { clearTimeout(pending); pending = null; }
       if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
+      if (board) board.destroy();
       if (btnSkip) btnSkip.removeEventListener("click", onSkip);
     },
     get score() { return solved; },
