@@ -1,19 +1,18 @@
 // THE LOCK — live procedural lock generation. Browser-safe (pure logic).
 //
-// Difficulty is CONSTRUCTED, not sampled (random graphs almost never sample a
-// hard board). A "relay chain" of length k: the target points into a tight node
-// c0, so it can't be flipped until c0 gets slack; slack only arrives by flipping
-// the chain edge from c1, which needs c1's slack, ... up to c_k whose reservoir
-// holds the only initial slack. The unique route is flip a_k ... a_1, then the
-// target — exactly k+1 moves. Difficulty is the dial k.
+// Difficulty is CONSTRUCTED as a branching RELAY TREE (acyclic, so a
+// force-directed layout SPREADS it — no ring). The red target points into the
+// root R; R can only be reversed once it gains +2 inflow, which it gets from its
+// sub-relays. An AND junction — two THIN (w=1) children that must BOTH be flipped
+// inward (+1 +1 = +2) — forces resolving MULTIPLE branches rather than unwinding
+// one line. Each leg is a w2 relay chain ending in a local "battery" (a rigid
+// pair feeding a slack-2 donor), so legs end in a small knot, not a big loop.
 //
-// A rigid 2-node "ground" cluster mutually satisfies inflow and feeds the chain
-// ends, so the start is legal and nothing outside the chain can shortcut it.
-// Node positions come from a force-directed layout (spreads nodes, cuts edge
-// crossings/overlaps). Every board is solver-verified (solvable + true optimal
-// == par) before being returned.
+// Small LOCAL rigid pairs anchor the target source and give each thin child its
+// static base inflow — no shared hub, which would cross-link the graph and tangle
+// the layout. Every board is solver-verified (solvable, optimal == par) first.
 
-import { bfsSolve } from "./solver.js";
+import { solveTarget } from "./solver.js";
 
 // Seedable PRNG (mulberry32): reproducible runs for sharing/fairness.
 export function makeRng(seed) {
@@ -28,52 +27,83 @@ export function makeRng(seed) {
 
 const round1 = (x) => Math.round(x * 10) / 10;
 
-const W = 72, H = 116; // interior layout box (slightly less tall than the viewport)
+// ── Layout ────────────────────────────────────────────────────────────────
+// Force-directed, multi-start, readability-scored. The graph is a tree (+ tiny
+// rigid 2-cycles), so a plain random-seeded relaxation spreads it; we run several
+// and keep the most legible (fewest crossings / grazes / cramped pairs / sharp
+// angles). Generation is a few ms, well under the between-lock delay.
+const W = 72, H = 116; // interior layout box
 const FIT = { X0: 14, X1: 86, Y0: 22, Y1: 144 };
 
-// One Fruchterman–Reingold relaxation. Seeded from a jittered ring in CYCLE
-// order (cycleIdx[r] = node index placed at ring slot r), so the main loop's
-// edges connect ring-adjacent nodes and start crossing-free; then relaxed.
-function frSimulate(n, pairs, rng, cycleIdx) {
-  const k = 0.95 * Math.sqrt((W * H) / n); // ideal edge length
-  const pos = new Array(n);
-  for (let r = 0; r < n; r++) {
-    const a = (r / n) * Math.PI * 2 + (rng() - 0.5) * 0.8;
-    const rad = (Math.min(W, H) / 2) * (0.66 + rng() * 0.24);
-    pos[cycleIdx[r]] = { x: W / 2 + Math.cos(a) * rad, y: H / 2 + Math.sin(a) * rad };
+// Layered seed: BFS levels from the highest-degree node (the hub/root), placed
+// top-to-bottom with each level spread across x and jittered. A tree drawn in
+// layers is almost planar, so FR starts near-untangled instead of from noise.
+function layeredInit(n, pairs, rng) {
+  const adj = Array.from({ length: n }, () => []);
+  for (const [a, b] of pairs) { adj[a].push(b); adj[b].push(a); }
+  let root = 0;
+  for (let i = 1; i < n; i++) if (adj[i].length > adj[root].length) root = i;
+  const level = new Array(n).fill(-1);
+  level[root] = 0;
+  const q = [root];
+  for (let head = 0; head < q.length; head++) {
+    const v = q[head];
+    for (const u of adj[v]) if (level[u] < 0) { level[u] = level[v] + 1; q.push(u); }
   }
+  const byLevel = new Map();
+  let maxL = 0;
+  for (let i = 0; i < n; i++) {
+    const L = level[i] < 0 ? 0 : level[i];
+    if (!byLevel.has(L)) byLevel.set(L, []);
+    byLevel.get(L).push(i);
+    if (L > maxL) maxL = L;
+  }
+  const pos = new Array(n);
+  for (const [L, row] of byLevel) {
+    const y = H * ((L + 0.5) / (maxL + 1)) + (rng() - 0.5) * 8;
+    row.forEach((i, idx) => {
+      const x = W * ((idx + 0.5) / row.length) + (rng() - 0.5) * 10;
+      pos[i] = { x, y };
+    });
+  }
+  return pos;
+}
+
+function frSimulate(n, pairs, rng) {
+  const k = 0.95 * Math.sqrt((W * H) / n); // ideal edge length
+  const pos = layeredInit(n, pairs, rng);
+  const dispX = new Float64Array(n), dispY = new Float64Array(n); // reused each iter
   let temp = W / 6;
   for (let it = 0; it < 200; it++) {
-    const disp = pos.map(() => ({ x: 0, y: 0 }));
+    dispX.fill(0); dispY.fill(0);
     for (let i = 0; i < n; i++) {
       for (let j = i + 1; j < n; j++) {
         let dx = pos[i].x - pos[j].x, dy = pos[i].y - pos[j].y;
         let dist = Math.hypot(dx, dy);
         if (dist < 0.01) { dx = (rng() - 0.5) * 0.1; dy = (rng() - 0.5) * 0.1; dist = Math.hypot(dx, dy) || 0.01; }
-        const f = (k * k) / dist; // repulsion
-        disp[i].x += (dx / dist) * f; disp[i].y += (dy / dist) * f;
-        disp[j].x -= (dx / dist) * f; disp[j].y -= (dy / dist) * f;
+        const f = (k * k) / (dist * dist); // repulsion (per unit vector)
+        const ux = dx * f, uy = dy * f;
+        dispX[i] += ux; dispY[i] += uy; dispX[j] -= ux; dispY[j] -= uy;
       }
     }
     for (const [a, b] of pairs) {
       let dx = pos[a].x - pos[b].x, dy = pos[a].y - pos[b].y;
       const dist = Math.hypot(dx, dy) || 0.01;
-      const f = (dist * dist) / k; // attraction
-      disp[a].x -= (dx / dist) * f; disp[a].y -= (dy / dist) * f;
-      disp[b].x += (dx / dist) * f; disp[b].y += (dy / dist) * f;
+      const f = dist / k; // attraction (per unit vector)
+      const ux = dx * f, uy = dy * f;
+      dispX[a] -= ux; dispY[a] -= uy; dispX[b] += ux; dispY[b] += uy;
     }
     for (let i = 0; i < n; i++) {
-      const dl = Math.hypot(disp[i].x, disp[i].y) || 1e-6;
+      const dl = Math.hypot(dispX[i], dispY[i]) || 1e-6;
       const step = Math.min(dl, temp);
-      pos[i].x = Math.max(0, Math.min(W, pos[i].x + (disp[i].x / dl) * step));
-      pos[i].y = Math.max(0, Math.min(H, pos[i].y + (disp[i].y / dl) * step));
+      pos[i].x = Math.max(0, Math.min(W, pos[i].x + (dispX[i] / dl) * step));
+      pos[i].y = Math.max(0, Math.min(H, pos[i].y + (dispY[i] / dl) * step));
     }
     temp *= 0.975; // cool
   }
   return fitToBox(pos);
 }
 
-// Uniformly scale + center a layout into the portrait fit box.
 function fitToBox(pos) {
   let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
   for (const p of pos) {
@@ -98,9 +128,10 @@ function pointSegDist(p, a, b) {
   return Math.hypot(p.x - (a.x + dx * t), p.y - (a.y + dy * t));
 }
 // Lower is better: crossings dominate, then edges grazing non-incident nodes,
-// then cramped node pairs. Drives the multi-start selection below.
+// then cramped node pairs, then two edges leaving a node at near-equal heading
+// (which visually overlap).
 function layoutScore(n, pairs, pos) {
-  let cross = 0, graze = 0, cramped = 0;
+  let cross = 0, graze = 0, cramped = 0, sharp = 0;
   for (let i = 0; i < pairs.length; i++) {
     for (let j = i + 1; j < pairs.length; j++) {
       const [a, b] = pairs[i], [c, d] = pairs[j];
@@ -119,80 +150,110 @@ function layoutScore(n, pairs, pos) {
       if (Math.hypot(pos[i].x - pos[j].x, pos[i].y - pos[j].y) < 11) cramped++;
     }
   }
-  return cross * 100 + graze * 45 + cramped * 12;
+  const adj = Array.from({ length: n }, () => []);
+  for (const [a, b] of pairs) { adj[a].push(b); adj[b].push(a); }
+  for (let v = 0; v < n; v++) {
+    const dirs = adj[v].map((u) => Math.atan2(pos[u].y - pos[v].y, pos[u].x - pos[v].x));
+    for (let i = 0; i < dirs.length; i++) {
+      for (let j = i + 1; j < dirs.length; j++) {
+        let da = Math.abs(dirs[i] - dirs[j]);
+        if (da > Math.PI) da = 2 * Math.PI - da;
+        if (da < 0.45) sharp++; // ~26°: arrows would visually merge
+      }
+    }
+  }
+  // Weighted so score < 100 iff zero crossings AND zero grazes (the quality
+  // bars); cramped/sharp are minor tiebreakers. Lets forceLayout early-exit.
+  return cross * 1000 + graze * 100 + cramped * 5 + sharp * 15;
 }
 
-// Multi-start force layout: generation is sub-ms, so run several relaxations and
-// keep the most readable (fewest crossings / grazes / cramped pairs). `order` is
-// the node ids in cycle order, used to seed each start crossing-free.
-function forceLayout(ids, edges, rng, order) {
+function forceLayout(ids, edges, rng) {
   const n = ids.length;
   const index = new Map(ids.map((id, i) => [id, i]));
   const pairs = edges.map((e) => [index.get(e.u), index.get(e.v)]);
-  const cycleIdx = order.map((id) => index.get(id));
   let best = null, bestScore = Infinity;
-  for (let start = 0; start < 16; start++) {
-    const pos = frSimulate(n, pairs, rng, cycleIdx);
+  for (let start = 0; start < 28; start++) {
+    const pos = frSimulate(n, pairs, rng);
     const score = layoutScore(n, pairs, pos);
     if (score < bestScore) { bestScore = score; best = pos; }
-    if (bestScore === 0) break; // perfect: no crossings, grazes, or cramping
+    if (bestScore < 100) break; // crossing-free & no grazes — good enough
   }
   const out = {};
   ids.forEach((id, i) => { out[id] = { x: round1(best[i].x), y: round1(best[i].y) }; });
   return out;
 }
 
-// Difficulty d (1+) -> chain length. optimal ≈ k + 1.
-export function chainLength(d) {
-  return 1 + Math.max(1, Math.floor(d));
+// ── Difficulty → tree shape ─────────────────────────────────────────────────
+// d=1 is a single linear relay (gentle intro, no AND). d>=2 is an AND of 2 (then
+// 3) legs whose w2-chain lengths grow with d. `legs[i]` = chain length of leg i.
+export function difficultyShape(d) {
+  d = Math.max(1, Math.floor(d));
+  if (d === 1) return { single: true, legs: [1] };
+  // AND of EXACTLY two legs (both required — three thin legs into a +2 root would
+  // be 2-of-3, i.e. one skippable). Chain lengths grow with d, capped so the
+  // exhaustive solver stays fast and boards stay phone-readable. Difficulty
+  // plateaus at the cap (fine for untimed survival).
+  const total = Math.min(9, d);
+  const a = Math.min(5, Math.ceil(total / 2));
+  const b = Math.min(5, Math.floor(total / 2));
+  return { single: false, legs: [Math.max(1, a), Math.max(1, b)] };
 }
 
-// Generate one lock at the given difficulty. Returns a verified Level (with
-// `par`) or null if the (rare) solver check disagrees with the construction.
+// ── Construction ────────────────────────────────────────────────────────────
+// Generate one lock at the given difficulty. Returns a solver-verified Level
+// (with `par`) or null if the (rare) solver check disagrees with construction.
 export function generateLock(difficulty, rng) {
-  const d = Math.max(1, Math.floor(difficulty));
-  const k = chainLength(d);
-  const decoyCount = Math.max(1, Math.min(4, d - 1));
-
-  const chain = [];
-  for (let i = 0; i <= k; i++) chain.push("c" + i);
-  const decoys = [];
-  for (let i = 0; i < decoyCount; i++) decoys.push("k" + i);
-  const allIds = [...chain, "x", "y", "g1", "g2", ...decoys];
-
+  const shape = difficultyShape(difficulty);
+  let nid = 0, eid = 0;
   const edges = [];
-  let ei = 0;
-  const add = (u, v, w, dir) => {
-    const id = "e" + ei++;
-    edges.push({ id, u, v, w, dir });
-    return id;
-  };
+  const node = () => "n" + nid++;
+  const E = (u, v, w) => { const id = "e" + eid++; edges.push({ id, u, v, w, dir: "uv" }); return id; };
+  const pair = () => { const a = node(), b = node(); E(a, b, 2); E(b, a, 2); return a; }; // rigid; returns usable node
 
-  // Rigid ground cluster (each inflow 2, mutually satisfied, un-flippable).
-  add("g1", "g2", 2, "uv");
-  add("g2", "g1", 2, "uv");
-  // Feeders for the chain ends.
-  add("g1", "x", 2, "uv");
-  add("g2", "y", 2, "uv");
-  // Target: x -> c0 (into c0). c0 is tight, so the target is not flippable yet.
-  const targetId = add("x", chain[0], 2, "uv");
-  // Chain: c_{i-1} -> c_i (into c_i); each c_i starts tight.
-  for (let i = 1; i <= k; i++) add(chain[i - 1], chain[i], 2, "uv");
-  // Reservoir: y -> c_k (into c_k) gives the chain's far end its only slack.
-  add("y", chain[k], 2, "uv");
-  // Decoys: tight, ground-fed red herrings; never feed the chain.
-  for (const dn of decoys) add("g1", dn, 2, "uv");
+  // A battery: a slack-2 donor `b` and one satellite `s`. Two parallel s->b
+  // edges give b inflow 4 (slack 2, so it can donate 2); b->s keeps s fed. Just
+  // two nodes (a compact lens), so it lays out cleanly instead of tangling like
+  // a 3-node triangle.
+  function makeBattery() {
+    const s = node(), b = node();
+    E(b, s, 2);             // b -> s keeps s satisfied
+    E(s, b, 2); E(s, b, 2); // two s -> b: b inflow 4 (donates 2)
+    return b;
+  }
 
-  // Ring order following the actual cycle (g1-x-chain-y-g2), decoys appended as
-  // pendants near g1 — seeds a crossing-free layout.
-  const order = ["g1", "x", ...chain, "y", "g2", ...decoys];
-  const pos = forceLayout(allIds, edges, rng, order);
-  const nodes = allIds.map((id) => ({ id, x: pos[id].x, y: pos[id].y }));
+  const R = node(), x = node();
+  const target = E(x, R, 2);      // TARGET x -> R (into R); reverse it to win
+  const ax = pair(); E(ax, x, 2); // LOCAL anchor: x at inflow 2 (inert)
 
-  const level = { id: "lock-d" + d, name: "Lock", nodes, edges, target: targetId };
+  // From `top` (which must gain +2 to flip its parent edge), build a w2 relay of
+  // length L ending in a battery: top->m1->...->mL->battery.
+  function relay(top, L) {
+    let prev = top;
+    for (let i = 0; i < L; i++) { const m = node(); E(prev, m, 2); prev = m; }
+    const b = makeBattery();
+    E(prev, b, 2); // charge edge: flip prev->b to gain +2 at prev
+  }
 
-  const rep = bfsSolve(level);
-  if (!rep.solvable || rep.exhausted) return null;
+  if (shape.single) {
+    const C = node();
+    E(R, C, 2);                   // single w2 child (no AND): one chain unlocks R
+    relay(C, shape.legs[0]);
+  } else {
+    for (const L of shape.legs) {
+      const C = node();
+      E(R, C, 1);                 // AND input (thin): all children must flip in
+      const t = pair(); E(t, C, 1); // LOCAL static base so C starts tight at 2
+      relay(C, L);
+    }
+  }
+
+  const ids = [...new Set(edges.flatMap((e) => [e.u, e.v]))];
+  const pos = forceLayout(ids, edges, rng);
+  const nodes = ids.map((id) => ({ id, x: pos[id].x, y: pos[id].y }));
+  const level = { id: "lock-d" + Math.max(1, Math.floor(difficulty)), name: "Lock", nodes, edges, target };
+
+  const rep = solveTarget(level);
+  if (!rep.solvable) return null;
   level.par = rep.optimalLength;
   return level;
 }

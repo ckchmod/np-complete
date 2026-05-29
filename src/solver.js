@@ -116,6 +116,44 @@ export function bfsSolve(level) {
 }
 
 // ---------------------------------------------------------------------------
+// solveTarget
+//
+// Goal-directed BFS: the shortest number of legal flips to reverse the TARGET
+// edge. Unlike bfsSolve it STOPS at the goal (does not exhaust the reachable
+// component), so it's much cheaper — used by the live generator, which only
+// needs solvability + optimal length, not reachableCount. Returns
+// { solvable, optimalLength }. solvable=false if unsolvable or the state cap is
+// hit before the goal is found.
+// ---------------------------------------------------------------------------
+
+export function solveTarget(level) {
+  const start = makeConfig(level);
+  if (isSolved(start)) return { solvable: true, optimalLength: 0 };
+
+  const visited = new Set([encode(start)]);
+  let frontier = [start];
+  let depth = 0;
+
+  while (frontier.length > 0) {
+    const next = [];
+    depth++;
+    for (const config of frontier) {
+      for (const edgeId of legalFlips(config)) {
+        const neighbor = applyFlip(config, edgeId);
+        if (isSolved(neighbor)) return { solvable: true, optimalLength: depth };
+        const key = encode(neighbor);
+        if (visited.has(key)) continue;
+        visited.add(key);
+        next.push(neighbor);
+        if (visited.size >= STATE_CAP) return { solvable: false, optimalLength: null };
+      }
+    }
+    frontier = next;
+  }
+  return { solvable: false, optimalLength: null };
+}
+
+// ---------------------------------------------------------------------------
 // greedyReaches
 //
 // From the start config, repeatedly take the legal flip that most REDUCES the
