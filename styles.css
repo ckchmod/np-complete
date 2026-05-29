@@ -413,6 +413,11 @@ html, body {
 /* ── Mode chrome: tutorial vs rush ────────────────────────────────────────── */
 .rush-only { display: none; }
 .mode-rush .tutorial-only { display: none; }
+/* #hud/#controls/#nav-bar set `display` via an ID selector, which out-specifies
+   the class rule above — so hide them explicitly in rush (ID+class beats ID). */
+.mode-rush #hud,
+.mode-rush #controls,
+.mode-rush #nav-bar { display: none; }
 .mode-rush #rush-hud { display: flex; }
 .mode-rush #rush-controls { display: flex; }
 #rush-hud { align-items: baseline; gap: 6px; }

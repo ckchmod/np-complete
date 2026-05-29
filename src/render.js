@@ -55,10 +55,16 @@ function unit(dx, dy) {
 }
 
 // Curve locus: fixed by (u,v) positions + a perpendicular bow.
+// The bow's perpendicular is taken in a CANONICAL node order (sorted ids), not
+// edge.u->edge.v. Otherwise a 2-cycle's two opposite edges (u,v swapped) compute
+// negated perpendiculars, so equal-and-opposite bows land on the SAME side and
+// the arrows collapse into one blob. Canonical order makes them bow apart.
 function edgeCurve(nodeById, edge, bow) {
   const A = nodeById.get(edge.u);
   const B = nodeById.get(edge.v);
-  const [ux, uy] = unit(B.x - A.x, B.y - A.y);
+  const P = edge.u < edge.v ? A : B;
+  const Q = edge.u < edge.v ? B : A;
+  const [ux, uy] = unit(Q.x - P.x, Q.y - P.y);
   const px = -uy;
   const py = ux;
   const mx = (A.x + B.x) / 2;
