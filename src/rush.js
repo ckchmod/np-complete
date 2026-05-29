@@ -13,6 +13,7 @@ const STRIKES_MAX = 3;
 const STORAGE_BEST = "the-lock:rush-best";
 const SOLVE_DELAY = 900; // ms to savour a solve before the next lock (fits the win cascade)
 const STRIKE_DELAY = 850; // ms to register a strike
+const RESUME_DELAY = 450; // ms beat before a paused transition fires once a modal (the "?" rules) closes
 
 // Move budget for a lock of optimal `par`: always > par so a clean solve fits,
 // with headroom for a little exploration. Tunable.
@@ -60,7 +61,23 @@ export function createRush({ mountEl, seed, onGameOver }) {
   let over = false;
   let lastHead = ""; // gadget of the previous board, so the next is a different kind
   let pending = null; // the one in-flight transition timer (solve/strike -> next)
+  let pendingFn = null; // the action that timer will run — retained so pause()/resume() can re-arm it
   let toastTimer = null; // transient toast auto-hide timer
+
+  // The single in-flight transition (solve/strike -> next lock or game over).
+  // Routed through schedule() so a modal — the "?" rules overlay opened mid-run —
+  // can freeze it and resume it, instead of the timer firing behind the overlay
+  // and silently advancing the run (swapping the board / ending the run unseen).
+  function schedule(fn, delay) {
+    pendingFn = fn;
+    pending = setTimeout(() => { pending = null; pendingFn = null; fn(); }, delay);
+  }
+  function pause() { // freeze an in-flight transition; keep the action for resume()
+    if (pending) { clearTimeout(pending); pending = null; }
+  }
+  function resume() { // re-arm a frozen transition (no-op if the run ended or none was pending)
+    if (!over && pendingFn && !pending) schedule(pendingFn, RESUME_DELAY);
+  }
 
   function generate(d) {
     // Pass the previous gadget so the next board is a DIFFERENT kind (no two
@@ -130,7 +147,7 @@ export function createRush({ mountEl, seed, onGameOver }) {
       locked = true;
       board.winCascade();
       updateHUD();
-      pending = setTimeout(loadNext, SOLVE_DELAY);
+      schedule(loadNext, SOLVE_DELAY);
     } else if (moves >= budget) {
       strike();
     }
@@ -145,9 +162,9 @@ export function createRush({ mountEl, seed, onGameOver }) {
     if (strikesEl) { strikesEl.classList.remove("struck"); void strikesEl.offsetWidth; strikesEl.classList.add("struck"); }
     try { if (navigator.vibrate) navigator.vibrate(60); } catch (_) {}
     if (strikes >= STRIKES_MAX) {
-      pending = setTimeout(gameOver, STRIKE_DELAY);
+      schedule(gameOver, STRIKE_DELAY);
     } else {
-      pending = setTimeout(loadNext, STRIKE_DELAY);
+      schedule(loadNext, STRIKE_DELAY);
     }
   }
 
@@ -179,10 +196,13 @@ export function createRush({ mountEl, seed, onGameOver }) {
     destroy() {
       over = true; // stop any in-flight transition from acting on a dead run
       if (pending) { clearTimeout(pending); pending = null; }
+      pendingFn = null;
       if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
       if (board) board.destroy();
       if (btnSkip) btnSkip.removeEventListener("click", onSkip);
     },
+    pause,  // freeze the in-flight transition while the "?" rules overlay is open
+    resume, // resume it when the overlay closes
     get score() { return solved; },
   };
 }

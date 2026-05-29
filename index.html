@@ -99,6 +99,24 @@
       </div>
     </div>
 
+    <!-- Rush rules: shown once at the tutorial→Rush handoff, and from "?" mid-run. -->
+    <div id="rush-intro" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Rush rules">
+      <div class="overlay-card">
+        <div class="intro-logo">RUSH</div>
+        <p class="intro-goal">Pick as many locks as you can.</p>
+        <ul class="intro-rules">
+          <li>Every lock still opens the same way — reverse the <span class="intro-red">red</span> arrow.</li>
+          <li>Each lock gives you a <b>move budget</b>. Open it before you run out of moves.</li>
+          <li>You have three lives (<span class="intro-red">✕ ✕ ✕</span>). Running out of moves spends one.</li>
+          <li>Stuck? <b>Skip</b> the lock — it also costs a life, but you live to pick the next.</li>
+        </ul>
+        <p class="intro-foot">Three lives gone ends the run. How far can you get?</p>
+        <div class="result-actions">
+          <button id="btn-rush-start" class="btn btn-primary">Start picking</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Front-page objective / how to play -->
     <div id="intro" class="overlay" role="dialog" aria-modal="true" aria-label="How to play">
       <div class="overlay-card">

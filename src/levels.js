@@ -149,6 +149,41 @@ export const TUTORIALS = [
     target: "et",
     hint: "Two paths lead to the same lock. Either choice works — commit.",
   },
+
+  // ── Tutorial 6 — Lend & Reclaim (the shuttle) ────────────────────────────
+  // 7-move solve. Teaches the BACKTRACKING move that THE LOCK is built around:
+  // to satisfy K you must first send the thin S->T arrow the "wrong" way (LEND
+  // it — T drops toward the blocked state), rearrange K through its battery,
+  // then RECLAIM it. Greedy play (only ever moving toward the goal) dead-ends —
+  // solver-verified backtrackingRequired (see test/levels.test.js).
+  // Inflows: T=3, K=2, S=2, B=2, Db=5, Ds=2.
+  // Target KT BLOCKED move 1 (T 3-2=1<2). Route: ST KS KD SK ST TS KT
+  //   (ST appears twice — lend on move 1, reclaim on move 5.)
+  {
+    id: "tut-6", name: "Tutorial 6 — Lend & Reclaim", par: 7,
+    nodes: [
+      { id: "T",  x: 52, y: 50 },  // target receiver
+      { id: "K",  x: 30, y: 78 },  // target sender
+      { id: "S",  x: 74, y: 78 },  // shuttle partner
+      { id: "B",  x: 92, y: 102 }, // S's ballast sink
+      { id: "Db", x: 30, y: 110 }, // K's battery (chargeable donor)
+      { id: "Ds", x: 16, y: 134 }, // battery tail
+    ],
+    edges: [
+      { id: "KT", u: "K", v: "T",  w: 2, dir: "uv" }, // TARGET K->T (blocked)
+      { id: "ST", u: "S", v: "T",  w: 1, dir: "uv" }, // S->T thin — the SHUTTLE (lend/reclaim)
+      { id: "TS", u: "T", v: "S",  w: 1, dir: "uv" }, // T->S thin
+      { id: "KS", u: "K", v: "S",  w: 1, dir: "uv" }, // K->S thin
+      { id: "SK", u: "S", v: "K",  w: 2, dir: "uv" }, // S->K thick (bulk to K)
+      { id: "SB", u: "S", v: "B",  w: 2, dir: "uv" }, // S->B ballast
+      { id: "KD", u: "K", v: "Db", w: 1, dir: "uv" }, // K->battery thin (flip Db->K: +1 to K)
+      { id: "Dbs", u: "Db", v: "Ds", w: 2, dir: "uv" }, // battery internal
+      { id: "Dsb1", u: "Ds", v: "Db", w: 2, dir: "uv" },
+      { id: "Dsb2", u: "Ds", v: "Db", w: 2, dir: "uv" },
+    ],
+    target: "KT",
+    hint: "Sometimes you must go backwards first: lend a thin arrow the wrong way, free up the lock, then reclaim it.",
+  },
 ];
 
 // ── THE LOCK ──────────────────────────────────────────────────────────────────

@@ -9,14 +9,14 @@ import { TUTORIALS, THE_LOCK, LEVELS } from "../src/levels.js";
 // Exports / shape
 // ---------------------------------------------------------------------------
 
-test("TUTORIALS is an array of 5 levels", () => {
+test("TUTORIALS is an array of 6 levels", () => {
   assert.ok(Array.isArray(TUTORIALS));
-  assert.equal(TUTORIALS.length, 5);
+  assert.equal(TUTORIALS.length, 6);
 });
 
 test("LEVELS is the tutorials followed by THE LOCK", () => {
   assert.deepEqual(LEVELS, [...TUTORIALS, THE_LOCK]);
-  assert.equal(LEVELS.length, 6);
+  assert.equal(LEVELS.length, 7);
 });
 
 test("every level conforms to the engine Level shape", () => {

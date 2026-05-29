@@ -22,15 +22,24 @@ const btnStart = document.getElementById("btn-start");
 const btnSkipTutorial = document.getElementById("btn-skip-tutorial");
 const btnHelp  = document.getElementById("btn-help");
 const rushOver = document.getElementById("rush-over");
+const rushIntro = document.getElementById("rush-intro");
+const btnRushStart = document.getElementById("btn-rush-start");
 
 let currentIndex = 0;
 let currentGame = null;
 let rush = null;
 let lastShare = "";
+let handoffTimer = null; // the 1400ms post-win handoff timer (cleared on any navigation)
 
 function hideResultCard() {
   const card = document.getElementById("result-card");
   if (card) { card.classList.remove("visible"); card.classList.add("hidden"); }
+}
+
+// Cancel a pending post-win handoff so it can't fire after the player already
+// navigated (e.g. tapped "Skip to Rush" within the 1400ms savour delay).
+function clearHandoff() {
+  if (handoffTimer) { clearTimeout(handoffTimer); handoffTimer = null; }
 }
 
 // ── Tutorials ─────────────────────────────────────────────────────────────────
@@ -41,6 +50,7 @@ function goTo(index) {
 }
 
 function loadTutorial(level) {
+  clearHandoff();
   mountEl.classList.remove("mode-rush");
   if (titleEl) titleEl.textContent = level.name;
   if (hintEl) hintEl.textContent = level.hint || "";
@@ -52,9 +62,10 @@ function loadTutorial(level) {
     level,
     mountEl,
     onWin() {
-      setTimeout(() => {
+      handoffTimer = setTimeout(() => {
+        handoffTimer = null;
         if (currentIndex < TUTORIALS.length - 1) goTo(currentIndex + 1);
-        else enterRush();
+        else showRushRules(true); // last tutorial cleared → Rush rules, then Rush
       }, 1400);
     },
   });
@@ -62,6 +73,7 @@ function loadTutorial(level) {
 
 // ── Rush ──────────────────────────────────────────────────────────────────────
 function enterRush() {
+  clearHandoff();
   if (currentGame) { currentGame.destroy(); currentGame = null; }
   if (rush) { rush.destroy(); rush = null; }
   markTutorialsDone();
@@ -102,13 +114,31 @@ function countUp(el, to) {
   })(performance.now());
 }
 
+// ── Rush-rules interstitial ───────────────────────────────────────────────────
+// One overlay, two roles. As a GATE (tutorial→Rush handoff) its button starts a
+// fresh run; opened from "?" during a run it freezes the run and its button just
+// resumes. The role is the current screen (mode-rush), so the button derives it
+// at click time — no separate flag to keep in sync.
+function showRushRules(asGate) {
+  clearHandoff();
+  if (btnRushStart) btnRushStart.textContent = asGate ? "Start picking" : "Resume";
+  hideResultCard();                  // clear any leftover tutorial result-card (gate after a win)
+  if (!asGate && rush) rush.pause(); // help mid-run: freeze the in-flight transition so it can't fire behind the modal
+  if (rushIntro) rushIntro.classList.remove("hidden");
+}
+if (btnRushStart) btnRushStart.addEventListener("click", () => {
+  if (rushIntro) rushIntro.classList.add("hidden");
+  if (mountEl.classList.contains("mode-rush")) { if (rush) rush.resume(); } // resume the frozen run
+  else enterRush();                                                         // gate: start a fresh run
+});
+
 // ── Nav wiring ──────────────────────────────────────────────────────────────
 if (navPrev) navPrev.addEventListener("click", () => goTo(currentIndex - 1));
 if (navNext) navNext.addEventListener("click", () => {
   if (currentIndex < TUTORIALS.length - 1) goTo(currentIndex + 1);
-  else enterRush();
+  else showRushRules(true);
 });
-if (navSkip) navSkip.addEventListener("click", enterRush);
+if (navSkip) navSkip.addEventListener("click", () => showRushRules(true));
 
 const btnRushAgain = document.getElementById("btn-rush-again");
 const btnRushShare = document.getElementById("btn-rush-share");
@@ -131,9 +161,14 @@ if (btnStart) btnStart.addEventListener("click", () => {
 if (btnSkipTutorial) btnSkipTutorial.addEventListener("click", () => {
   try { localStorage.setItem(STORAGE_INTRO_SEEN, "1"); } catch (_) {}
   hideIntro();
-  enterRush(); // jump straight into Rush, skipping the tutorials
+  showRushRules(true); // skip the tutorials, but still show the Rush rules first
 });
-if (btnHelp) btnHelp.addEventListener("click", showIntro);
+// Help is context-aware: the Rush rules during a run, the how-to-play intro
+// during the tutorials.
+if (btnHelp) btnHelp.addEventListener("click", () => {
+  if (mountEl.classList.contains("mode-rush")) showRushRules(false);
+  else showIntro();
+});
 try { if (localStorage.getItem(STORAGE_INTRO_SEEN)) hideIntro(); } catch (_) {}
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
