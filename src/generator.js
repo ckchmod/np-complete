@@ -117,18 +117,22 @@ function fitToBox(pos) {
   return pos.map((p) => ({ x: offx + (p.x - minx) * s, y: offy + (p.y - miny) * s }));
 }
 
-// Random rotation + optional mirror about the origin. A rigid transform, so it
-// preserves crossings/spacing (the layout score is unchanged) — purely for
-// VISUAL variety: an identical graph appears in a different orientation each run.
-// fitToBox re-centers afterwards, so absolute position here doesn't matter.
+// Vary the board's handedness/orientation WITHOUT squashing it. A full random
+// rotation can leave a graph wide, which then fits the tall play area by width
+// and wastes vertical space. So: random mirror in x and y (4 combinations), then
+// keep it PORTRAIT (transpose if wider than tall) so it fills the tall board, then
+// a small rotation jitter for an organic look. All rigid/reflection transforms,
+// so crossings/spacing are unchanged; fitToBox re-centers afterwards.
 function reorient(pos, rng) {
-  const ang = rng() * Math.PI * 2;
-  const ca = Math.cos(ang), sa = Math.sin(ang);
-  const mir = rng() < 0.5 ? -1 : 1;
-  return pos.map((p) => {
-    const x = p.x * mir, y = p.y;
-    return { x: x * ca - y * sa, y: x * sa + y * ca };
-  });
+  const mx = rng() < 0.5 ? -1 : 1;
+  const my = rng() < 0.5 ? -1 : 1;
+  let p = pos.map((q) => ({ x: q.x * mx, y: q.y * my }));
+  let mnx = Infinity, mny = Infinity, mxx = -Infinity, mxy = -Infinity;
+  for (const q of p) { mnx = Math.min(mnx, q.x); mny = Math.min(mny, q.y); mxx = Math.max(mxx, q.x); mxy = Math.max(mxy, q.y); }
+  if (mxx - mnx > mxy - mny) p = p.map((q) => ({ x: q.y, y: q.x })); // transpose -> portrait
+  const j = (rng() - 0.5) * 0.5; // ~±14deg jitter (won't flip the aspect)
+  const ca = Math.cos(j), sa = Math.sin(j);
+  return p.map((q) => ({ x: q.x * ca - q.y * sa, y: q.x * sa + q.y * ca }));
 }
 
 function segmentsCross(a, b, c, d) {

@@ -264,11 +264,11 @@ html, body {
 
 .level-hint {
   font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--c-grey);
+  font-size: 13px;
+  color: #9a9aac;
   text-align: center;
-  padding: 0 16px 6px;
-  min-height: 20px;
+  padding: 2px 16px 8px;
+  min-height: 24px;
   flex-shrink: 0;
   font-style: italic;
 }
