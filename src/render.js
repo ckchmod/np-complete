@@ -27,6 +27,12 @@ const ENDPOINT_GAP = NODE_R + 0.8; // stop strokes short of the node ring
 const BOW_STEP = 13; // perpendicular control-point offset between parallels
 const REVERSAL_MS = 300; // arrow reversal animation duration
 
+// Respect the OS "reduce motion" setting for the JS rAF tweens below (CSS
+// animations are neutralised by the @media block in styles.css).
+const prefersReducedMotion = () =>
+  typeof window !== "undefined" && window.matchMedia &&
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
 // Arrowhead size by edge weight: a thick (2) arrow gets a visibly bigger head —
 // clearly wider than its own shaft (stroke 3.2) so weight reads at a glance.
 function arrowDims(w) {
@@ -266,6 +272,12 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
     const { len, half } = view.dim;
     const fromT = headEnd(prevEnds, view.edge) === "B" ? 1 : 0;
     const toT = headEnd(nextEnds, view.edge) === "B" ? 1 : 0;
+    if (prefersReducedMotion()) { // snap to the final orientation, no glide
+      const head = toT === 1 ? "B" : "A";
+      view.arrow.setAttribute("d", arrowPathFor(c, head, len, half));
+      view.line.setAttribute("d", linePath(c, head, len));
+      return;
+    }
     const dirSign = toT > fromT ? 1 : -1;
     view.line.setAttribute("d", curvePath(c)); // full curve while the head glides
     const t0 = performance.now();
@@ -322,7 +334,8 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
   function pulse(nodeId) { pulseClass(nodeId, "is-pulsing"); }
 
   function winCascade() {
-    svgEl.classList.add("is-won");
+    svgEl.classList.add("is-won"); // win colour applies via .board.is-won regardless
+    if (prefersReducedMotion()) return; // skip the staggered pulse cascade
     const order = cascadeOrder(current);
     // Clamp the per-node stagger so the whole cascade finishes within the
     // post-solve delay even on big boards (a fixed 90ms overran and got cut off).

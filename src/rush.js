@@ -72,7 +72,10 @@ export function createRush({ mountEl, seed, onGameOver }) {
   function renderStrikes() {
     let s = "";
     for (let i = 0; i < STRIKES_MAX; i++) s += i < strikes ? "✕" : "·";
-    if (strikesEl) strikesEl.textContent = s;
+    if (strikesEl) {
+      strikesEl.textContent = s;
+      strikesEl.setAttribute("aria-label", strikes + " of " + STRIKES_MAX + " strikes used");
+    }
   }
   function updateHUD() {
     if (scoreEl) scoreEl.textContent = String(solved);

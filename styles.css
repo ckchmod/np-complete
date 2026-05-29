@@ -16,7 +16,7 @@
   --bg-surface:  #111118;
   --bg-overlay:  rgba(9, 9, 14, 0.92);
   --c-white:     #e8e8ec;
-  --c-grey:      #6a6a7a;
+  --c-grey:      #8a8a9a;  /* >=4.5:1 on --bg for WCAG AA (was #6a6a7a, ~3.7:1) */
   --c-dim:       #333340;
   --c-target:    #ff3333;
   --c-legal:     #00d4ff;
@@ -47,7 +47,8 @@ html, body {
   height: 100dvh;
   max-width: 480px;
   margin: 0 auto;
-  padding: 0;
+  /* Reserve device safe areas (notch / home indicator) — viewport-fit=cover. */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   position: relative;
 }
 
@@ -141,7 +142,7 @@ html, body {
 
 .edge-hit {
   stroke: transparent;
-  stroke-width: 6;
+  stroke-width: 12; /* wide invisible hit corridor (~44px target); the path is transparent so overlap is harmless */
   fill: none;
   pointer-events: stroke;
   cursor: pointer;
@@ -352,7 +353,7 @@ html, body {
 
 .nav-skip {
   font-size: 10px;
-  color: var(--c-dim);
+  color: var(--c-grey); /* was --c-dim (~1.4:1) — effectively invisible */
   letter-spacing: 0.04em;
   padding: 6px 8px;
 }
@@ -614,4 +615,19 @@ html, body {
 .btn:focus-visible {
   outline: 2px solid var(--c-legal);
   outline-offset: 2px;
+}
+
+/* ── Reduced motion ───────────────────────────────────────────────────────── */
+/* Honour the OS "reduce motion" setting: drop the shake/pulse/cascade/strike/
+   slide animations and near-instant all transitions. (JS rAF tweens are gated
+   separately in render.js via matchMedia.) */
+@media (prefers-reduced-motion: reduce) {
+  .edge-group.is-shaking,
+  .node-group.is-pulsing .node-ring,
+  .node-group.is-win-pulsing .node-ring,
+  .board.is-strike,
+  #rush-strikes.struck,
+  #rush-moves.low,
+  .result-card.visible { animation: none !important; }
+  * { transition-duration: 0.01ms !important; }
 }
