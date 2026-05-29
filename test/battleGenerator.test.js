@@ -4,9 +4,11 @@ import assert from "node:assert/strict";
 import { makeBattleConfig } from "../src/battleEngine.js";
 import {
   BATTLE_BALANCE_THRESHOLDS,
+  BATTLE_FIRST_PLAYER_BIAS_THRESHOLD,
   BATTLE_MAX_EDGES,
   BATTLE_MAX_NODES,
   decorateBattleLevel,
+  desiredBattleOutcome,
   evaluateBattle,
   generateBattle,
   hasFirstMoveWin,
@@ -60,6 +62,26 @@ test("deterministic sample has no first-move or shallow wins", () => {
     assert.ok(evaluation.distanceToWin >= BATTLE_BALANCE_THRESHOLDS.minDistanceToWin,
       `seed ${seed} distance ${evaluation.distanceToWin}`);
   }
+});
+
+test("deterministic batch satisfies first-player bias threshold", () => {
+  const counts = { white: 0, black: 0 };
+  const sampleSize = 50;
+
+  for (let offset = 0; offset < sampleSize; offset++) {
+    const seed = 3000 + offset;
+    const level = generateBattle({ seed });
+    const evaluation = evaluateBattle(level);
+
+    assert.equal(evaluation.passed, true, `seed ${seed} should pass balance thresholds`);
+    assert.equal(evaluation.outcome, desiredBattleOutcome(seed), `seed ${seed} should match desired outcome`);
+    assert.equal(evaluation.outcome, level.battle.diagnostics.desiredOutcome);
+    counts[evaluation.outcome]++;
+  }
+
+  const bias = Math.abs(counts.white - counts.black) / sampleSize;
+  assert.ok(bias < BATTLE_FIRST_PLAYER_BIAS_THRESHOLD,
+    `first-player bias ${bias} from ${JSON.stringify(counts)}`);
 });
 
 test("fallback path remains solver-checked and non-trivial", () => {

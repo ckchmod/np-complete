@@ -7,6 +7,7 @@ export const BATTLE_MAX_NODES = 24;
 export const BATTLE_MAX_EDGES = 30;
 export const BATTLE_GENERATOR_MAX_ATTEMPTS = 50;
 export const BATTLE_SOLVER_MAX_STATES = 250_000;
+export const BATTLE_FIRST_PLAYER_BIAS_THRESHOLD = 0.1;
 
 export const BATTLE_BALANCE_THRESHOLDS = Object.freeze({
   minDistanceToWin: 7,
@@ -19,6 +20,11 @@ export const BATTLE_BALANCE_THRESHOLDS = Object.freeze({
 });
 
 const OWNER_PATTERN = Object.freeze(["neutral", "white", "neutral", "black", "neutral"]);
+
+export function desiredBattleOutcome(seed = 0) {
+  const value = Number.isFinite(seed) ? Math.abs(Math.trunc(seed)) : 0;
+  return value % 2 === 0 ? "white" : "black";
+}
 
 function edgeNumber(edgeId) {
   const n = Number(edgeId.replace(/^\D+/, ""));
@@ -119,14 +125,20 @@ function candidateScore(evaluation, desiredOutcome) {
     + Math.min(10, evaluation.chargeTension);
 }
 
-function summarizeRejection(level, targetB, evaluation) {
+function rejectionReasons(evaluation, desiredOutcome) {
+  if (evaluation.passed && evaluation.outcome !== desiredOutcome) return ["wrong-outcome"];
+  return evaluation.reasons;
+}
+
+function summarizeRejection(level, targetB, evaluation, desiredOutcome) {
   return {
     sourceHead: level.head,
     targetB,
     outcome: evaluation.outcome,
+    desiredOutcome,
     distanceToWin: evaluation.distanceToWin,
     partial: evaluation.partial,
-    reasons: evaluation.reasons,
+    reasons: rejectionReasons(evaluation, desiredOutcome),
   };
 }
 
@@ -158,9 +170,14 @@ function attachDiagnostics(level, diagnostics, evaluation) {
 function fallbackBattle(options) {
   const rng = makeRng(options.seed ?? 1);
   const base = generateLock(1, rng);
-  const targetB = lockedTargetCandidates(base)[0]?.id;
-  if (!targetB) throw new Error("Unable to build battle fallback: no locked secondary target");
-  return decorateBattleLevel(base, targetB, { chargesPerEdge: 3 });
+  const desiredOutcome = options.desiredOutcome ?? desiredBattleOutcome(options.seed ?? 0);
+  const candidates = lockedTargetCandidates(base);
+  for (const candidate of candidates) {
+    const level = decorateBattleLevel(base, candidate.id, { chargesPerEdge: 3 });
+    const evaluation = evaluateBattle(level, { maxStates: options.maxStates });
+    if (evaluation.passed && evaluation.outcome === desiredOutcome) return level;
+  }
+  throw new Error(`Unable to build ${desiredOutcome} battle fallback`);
 }
 
 export function generateBattle(options = {}) {
@@ -170,7 +187,7 @@ export function generateBattle(options = {}) {
   const maxStates = options.maxStates ?? BATTLE_SOLVER_MAX_STATES;
   const difficulty = Math.max(1, Math.floor(options.difficulty ?? 1));
   const targetCandidatesPerBoard = options.targetCandidatesPerBoard ?? 4;
-  const desiredOutcome = rng() < 0.5 ? "white" : "black";
+  const desiredOutcome = options.desiredOutcome ?? desiredBattleOutcome(seed);
   const rejections = [];
   let best = null;
 
@@ -193,7 +210,7 @@ export function generateBattle(options = {}) {
       const evaluation = evaluateBattle(level, { maxStates });
       const scored = { level, evaluation, score: candidateScore(evaluation, desiredOutcome) };
       if (!best || scored.score > best.score) best = scored;
-      if (evaluation.passed) {
+      if (evaluation.passed && evaluation.outcome === desiredOutcome) {
         return attachDiagnostics(level, {
           attempts: attempt,
           fallback: false,
@@ -201,20 +218,18 @@ export function generateBattle(options = {}) {
           rejectionReasons: rejections,
         }, evaluation);
       }
-      rejections.push({ attempt, ...summarizeRejection(base, candidate.id, evaluation) });
+      rejections.push({ attempt, ...summarizeRejection(base, candidate.id, evaluation, desiredOutcome) });
     }
   }
 
-  const fallbackLevel = best?.evaluation?.distanceToWin >= BATTLE_BALANCE_THRESHOLDS.minDistanceToWin
-    && !best.evaluation.partial
-    && best.evaluation.distanceToWin !== 1
+  const fallbackLevel = best?.evaluation?.passed && best.evaluation.outcome === desiredOutcome
     ? best.level
-    : fallbackBattle({ seed });
+    : fallbackBattle({ seed, desiredOutcome, maxStates });
   const fallbackEvaluation = best?.level === fallbackLevel
     ? best.evaluation
     : evaluateBattle(fallbackLevel, { maxStates });
 
-  if (fallbackEvaluation.partial || fallbackEvaluation.distanceToWin === 1) {
+  if (!fallbackEvaluation.passed || fallbackEvaluation.outcome !== desiredOutcome) {
     throw new Error("Unable to generate non-trivial battle board fallback");
   }
 
