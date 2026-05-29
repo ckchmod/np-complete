@@ -31,7 +31,7 @@ const round1 = (x) => Math.round(x * 10) / 10;
 // Force-directed, multi-start, readability-scored. The graph is a tree (+ tiny
 // rigid 2-cycles), so a plain random-seeded relaxation spreads it; we run several
 // and keep the most legible (fewest crossings / grazes / cramped pairs / sharp
-// angles). Generation is a few ms, well under the between-lock delay.
+// angles). Layout dominates generation (tens of ms), well under the between-lock delay.
 const W = 72, H = 116; // interior layout box
 const FIT = { X0: 14, X1: 86, Y0: 22, Y1: 144 };
 
@@ -264,11 +264,14 @@ function attachCharger(ctx, N, need, len, rng) {
     }
     return;
   }
-  // OR: two thick branches, ANY one delivers +2 to N -> genuine choice / multi-path
+  // OR: two thick branches, ANY one delivers +2 to N -> genuine choice / multi-path.
+  // Each branch is a bounded CHAIN, not a nested charger: recursing here neither
+  // shrank `len` (it looped forever for len in {3,4}) nor stayed under the node cap
+  // (geometric blow-up). The choice between branches is what matters, not depth.
   for (let i = 0; i < 2; i++) {
     const C = ctx.node();
     ctx.E(N, C, 2);                                // N -> C thick
-    attachCharger(ctx, C, 2, Math.min(len, 4), rng);
+    chain(ctx, C, Math.min(len, 4));
   }
 }
 
@@ -285,7 +288,7 @@ function genericHead(ctx, type, len, rng) {
     const k = 2 + (rng() < 0.5 ? 1 : 0);
     for (let i = 0; i < k; i++) {
       const C = ctx.node(); ctx.E(R, C, 2); // thick OR branch; ANY one frees R
-      attachCharger(ctx, C, 2, Math.min(len, 4), rng);
+      chain(ctx, C, Math.min(len, 4));        // bounded chain per branch (see attachCharger OR)
     }
   } else { // "and": split len across two forcing legs (BOTH required)
     const a = 1 + Math.floor(rng() * Math.max(1, len - 1));
@@ -346,7 +349,7 @@ export function difficultyPlan(d, rng, avoidHead) {
 }
 
 const MAX_NODES = 24; // keep boards phone-legible
-const MAX_EDGES = 32; // keep the solver near its fast (non-BigInt) path
+const MAX_EDGES = 30; // solver's fast (non-BigInt) path is edges <= 30 (see solver.js encode)
 
 // ── Construction ────────────────────────────────────────────────────────────
 // Generate one lock at the given difficulty: pick a plan, compose gadgets, then

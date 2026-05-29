@@ -3,7 +3,7 @@
 // Pick as many locks as you can. Each lock must be solved within a MOVE BUDGET
 // (par + slack); blowing the budget, or tapping Skip, costs a strike. Three
 // strikes ends the run. Difficulty ramps with your score. Generation is live
-// and sub-millisecond, so the next lock appears instantly.
+// and runs in tens of ms (layout-dominated), well within the post-solve delay.
 
 import { makeConfig, isLegalFlip, legalFlips, applyFlip, isSolved } from "./engine.js";
 import { createBoard } from "./render.js";
@@ -62,7 +62,7 @@ export function createRush({ mountEl, seed, onGameOver }) {
   function generate(d) {
     // Pass the previous gadget so the next board is a DIFFERENT kind (no two
     // near-identical boards in a row). generateLock retries + verifies internally.
-    const L = generateLock(d, rng, lastHead) || generateLock(1, rng);
+    const L = generateLock(d, rng, lastHead) || generateLock(1, rng, lastHead);
     if (L) lastHead = L.head;
     return L;
   }
