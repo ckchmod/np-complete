@@ -139,7 +139,7 @@ function fmt(ms) {
 export function createGame({ level, mountEl, onWin }) {
   // Elements expected in mountEl (provided by index.html / main.js):
   // - svg#board
-  // - #move-count, #par-display, #pb-display
+  // - #move-count, #par-display
   // - #btn-undo, #btn-reset
   // - #result-card (hidden until win)
   //   - #result-moves, #result-par, #result-stars, #result-score, #result-pb, #result-hash
@@ -148,7 +148,6 @@ export function createGame({ level, mountEl, onWin }) {
   const svgEl = qs(mountEl, "#board");
   const moveCountEl = qs(mountEl, "#move-count");
   const parDisplayEl = qs(mountEl, "#par-display");
-  const pbDisplayEl = qs(mountEl, "#pb-display");
   const resultCard = qs(mountEl, "#result-card");
   const resultMovesEl = qs(mountEl, "#result-moves");
   const resultParEl = qs(mountEl, "#result-par");
@@ -211,9 +210,8 @@ export function createGame({ level, mountEl, onWin }) {
   refreshLegal();
   updateHUD();
 
-  // Show par
-  if (parDisplayEl) parDisplayEl.textContent = "par " + level.par;
-  refreshPB();
+  // Show the optimal (fewest-possible) move count
+  if (parDisplayEl) parDisplayEl.textContent = "optimal " + level.par;
 
   // Wire controls
   if (btnUndo) btnUndo.addEventListener("click", undo);
@@ -338,12 +336,6 @@ export function createGame({ level, mountEl, onWin }) {
 
   function updateHUD() {
     if (moveCountEl) moveCountEl.textContent = moveCount();
-  }
-
-  function refreshPB() {
-    if (!pbDisplayEl) return;
-    const best = loadBest(level.id);
-    pbDisplayEl.textContent = best ? "pb " + best.score : "";
   }
 
   function refreshLegal() {
