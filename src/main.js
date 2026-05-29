@@ -19,6 +19,7 @@ const navSkip  = document.getElementById("nav-skip");
 const navLabel = document.getElementById("nav-label");
 const introEl  = document.getElementById("intro");
 const btnStart = document.getElementById("btn-start");
+const btnSkipTutorial = document.getElementById("btn-skip-tutorial");
 const btnHelp  = document.getElementById("btn-help");
 const rushOver = document.getElementById("rush-over");
 
@@ -107,6 +108,11 @@ function showIntro() { if (introEl) introEl.classList.remove("hidden"); }
 if (btnStart) btnStart.addEventListener("click", () => {
   try { localStorage.setItem(STORAGE_INTRO_SEEN, "1"); } catch (_) {}
   hideIntro();
+});
+if (btnSkipTutorial) btnSkipTutorial.addEventListener("click", () => {
+  try { localStorage.setItem(STORAGE_INTRO_SEEN, "1"); } catch (_) {}
+  hideIntro();
+  enterRush(); // jump straight into Rush, skipping the tutorials
 });
 if (btnHelp) btnHelp.addEventListener("click", showIntro);
 try { if (localStorage.getItem(STORAGE_INTRO_SEEN)) hideIntro(); } catch (_) {}
