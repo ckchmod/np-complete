@@ -4,18 +4,16 @@ import { makeConfig, inflow, isLegalFlip } from "../src/engine.js";
 import { bfsSolve } from "../src/solver.js";
 import { generateLock, makeRng, difficultyShape } from "../src/generator.js";
 
-// Move count of a constructed relay tree: a single linear leg of length L costs
-// L+3 (charge the chain, flip R->C, flip target); an AND of legs costs
-// sum(L)+5 (each leg charges + its thin R->C flip, plus the target).
-function expectedPar(shape) {
-  return shape.single
-    ? shape.legs[0] + 3
-    : shape.legs.reduce((s, L) => s + L, 0) + 5;
+// Move count of a constructed relay tree. The two AND legs always sum to `total`,
+// so par is fixed per tier even though the split (and thus the shape) is random:
+// a single linear leg of length 1 costs 4, an AND of legs costs total+5.
+function expectedPar(d) {
+  if (d === 1) return 4;
+  return Math.min(9, d) + 5;
 }
 
-test("generated boards are valid, target-locked, and par matches construction", () => {
+test("generated boards are valid, target-locked, and par matches the tier", () => {
   for (let d = 1; d <= 12; d++) {
-    const shape = difficultyShape(d);
     for (let i = 0; i < 8; i++) {
       const L = generateLock(d, makeRng(1234 + d * 10 + i));
       assert.ok(L, `tier ${d} should generate a board`);
@@ -25,7 +23,7 @@ test("generated boards are valid, target-locked, and par matches construction", 
       }
       assert.equal(isLegalFlip(c, L.target), false, "target not flippable on move 1");
       assert.ok(L.edges.some((e) => e.id === L.target), "target edge must exist");
-      assert.equal(L.par, expectedPar(shape), `tier ${d}: par matches the shape`);
+      assert.equal(L.par, expectedPar(d), `tier ${d}: par fixed per tier`);
       assert.ok(L.par >= 3, "non-trivial");
     }
   }

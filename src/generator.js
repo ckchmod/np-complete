@@ -117,6 +117,20 @@ function fitToBox(pos) {
   return pos.map((p) => ({ x: offx + (p.x - minx) * s, y: offy + (p.y - miny) * s }));
 }
 
+// Random rotation + optional mirror about the origin. A rigid transform, so it
+// preserves crossings/spacing (the layout score is unchanged) — purely for
+// VISUAL variety: an identical graph appears in a different orientation each run.
+// fitToBox re-centers afterwards, so absolute position here doesn't matter.
+function reorient(pos, rng) {
+  const ang = rng() * Math.PI * 2;
+  const ca = Math.cos(ang), sa = Math.sin(ang);
+  const mir = rng() < 0.5 ? -1 : 1;
+  return pos.map((p) => {
+    const x = p.x * mir, y = p.y;
+    return { x: x * ca - y * sa, y: x * sa + y * ca };
+  });
+}
+
 function segmentsCross(a, b, c, d) {
   const o = (p, q, r) => Math.sign((q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x));
   return o(a, b, c) !== o(a, b, d) && o(c, d, a) !== o(c, d, b);
@@ -178,32 +192,35 @@ function forceLayout(ids, edges, rng) {
     if (score < bestScore) { bestScore = score; best = pos; }
     if (bestScore < 100) break; // crossing-free & no grazes — good enough
   }
+  const oriented = fitToBox(reorient(best, rng)); // random rotation/mirror for variety
   const out = {};
-  ids.forEach((id, i) => { out[id] = { x: round1(best[i].x), y: round1(best[i].y) }; });
+  ids.forEach((id, i) => { out[id] = { x: round1(oriented[i].x), y: round1(oriented[i].y) }; });
   return out;
 }
 
 // ── Difficulty → tree shape ─────────────────────────────────────────────────
 // d=1 is a single linear relay (gentle intro, no AND). d>=2 is an AND of 2 (then
 // 3) legs whose w2-chain lengths grow with d. `legs[i]` = chain length of leg i.
-export function difficultyShape(d) {
+export function difficultyShape(d, rng) {
   d = Math.max(1, Math.floor(d));
   if (d === 1) return { single: true, legs: [1] };
   // AND of EXACTLY two legs (both required — three thin legs into a +2 root would
-  // be 2-of-3, i.e. one skippable). Chain lengths grow with d, capped so the
-  // exhaustive solver stays fast and boards stay phone-readable. Difficulty
-  // plateaus at the cap (fine for untimed survival).
+  // be 2-of-3, i.e. one skippable). The two lengths always SUM to `total` (so par
+  // is fixed per tier), but the SPLIT is RANDOMIZED for per-board variety: same
+  // tier, genuinely different tree shapes ([1,4] vs [2,3] vs [4,1]...). Each leg
+  // stays in [1,5] so the solver stays fast and boards stay phone-readable.
   const total = Math.min(9, d);
-  const a = Math.min(5, Math.ceil(total / 2));
-  const b = Math.min(5, Math.floor(total / 2));
-  return { single: false, legs: [Math.max(1, a), Math.max(1, b)] };
+  const lo = Math.max(1, total - 5), hi = Math.min(5, total - 1);
+  const r = rng ? rng() : 0.5;
+  const a = lo + Math.floor(r * (hi - lo + 1));
+  return { single: false, legs: [a, total - a] };
 }
 
 // ── Construction ────────────────────────────────────────────────────────────
 // Generate one lock at the given difficulty. Returns a solver-verified Level
 // (with `par`) or null if the (rare) solver check disagrees with construction.
 export function generateLock(difficulty, rng) {
-  const shape = difficultyShape(difficulty);
+  const shape = difficultyShape(difficulty, rng);
   let nid = 0, eid = 0;
   const edges = [];
   const node = () => "n" + nid++;
