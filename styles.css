@@ -249,7 +249,7 @@ html, body {
   100% { stroke: var(--c-win);  r: 3.2; }
 }
 
-.node-group.is-pulsing .node-ring {
+.node-group.is-win-pulsing .node-ring {
   animation: win-pulse 0.5s ease-out forwards;
 }
 
@@ -443,6 +443,47 @@ html, body {
 #rush-hud { align-items: baseline; gap: 6px; }
 #rush-strikes.strikes { color: var(--c-target); letter-spacing: 0.18em; }
 #rush-controls { justify-content: center; }
+
+/* ── Rush feedback & juice ─────────────────────────────────────────────────── */
+/* Lost a life: red flash + shake on the whole board (render.js adds .is-strike). */
+@keyframes strike-flash {
+  0%   { filter: none; transform: translateX(0); }
+  12%  { filter: drop-shadow(0 0 7px var(--c-target)); transform: translateX(-5px); }
+  32%  { transform: translateX(5px); }
+  54%  { transform: translateX(-3px); }
+  100% { filter: none; transform: translateX(0); }
+}
+.board.is-strike { animation: strike-flash 0.42s ease-out; }
+
+/* The strikes glyph bumps when a life is spent. */
+@keyframes strike-bump { 0% { transform: scale(1); } 40% { transform: scale(1.5); } 100% { transform: scale(1); } }
+#rush-strikes.struck { display: inline-block; animation: strike-bump 0.4s ease-out; }
+
+/* Low move budget: the readout goes amber and breathes as the cap nears. */
+@keyframes budget-low { from { opacity: 1; } to { opacity: 0.45; } }
+#rush-moves.low { color: var(--c-slack); animation: budget-low 0.6s ease-in-out infinite alternate; }
+
+/* Transient toast (e.g. skip cost), centred over the board. */
+.rush-toast {
+  position: absolute;
+  top: 16%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-6px);
+  padding: 8px 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--c-target);
+  border-radius: var(--radius);
+  color: var(--c-white);
+  font-family: var(--font-label);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 20;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.rush-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .rush-final {
   font-family: var(--font-label);
   font-weight: 700;

@@ -53,8 +53,11 @@
 
     <!-- Rush controls -->
     <div id="rush-controls" class="rush-only">
-      <button id="btn-skip" class="btn btn-secondary" aria-label="Skip this lock (costs a strike)">Skip ✕</button>
+      <button id="btn-skip" class="btn btn-secondary" aria-label="Skip this lock (costs a life)">Skip (−1 ✕)</button>
     </div>
+
+    <!-- Rush transient toast (e.g. "SKIPPED · −1 life") -->
+    <div id="rush-toast" class="rush-toast" aria-live="polite"></div>
 
     <!-- Tutorial navigation -->
     <nav id="nav-bar" class="tutorial-only">

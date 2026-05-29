@@ -305,22 +305,36 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
     );
   }
 
-  function pulse(nodeId) {
+  function pulseClass(nodeId, cls) {
     const view = nodeViews.get(nodeId);
     if (!view) return;
-    restartClass(view.group, "is-pulsing");
+    restartClass(view.group, cls);
     view.group.addEventListener(
       "animationend",
-      () => view.group.classList.remove("is-pulsing"),
+      () => view.group.classList.remove(cls),
       { once: true }
     );
   }
 
+  // Neutral pulse for slack changes and blocked (illegal) taps. Distinct from the
+  // win cascade: a duplicate CSS selector used to make EVERY pulse flash the win
+  // colour (cyan), so an illegal tap looked like a solve.
+  function pulse(nodeId) { pulseClass(nodeId, "is-pulsing"); }
+
   function winCascade() {
     svgEl.classList.add("is-won");
-    cascadeOrder(current).forEach((nodeId, i) => {
-      setTimeout(() => pulse(nodeId), i * 90);
-    });
+    const order = cascadeOrder(current);
+    // Clamp the per-node stagger so the whole cascade finishes within the
+    // post-solve delay even on big boards (a fixed 90ms overran and got cut off).
+    const step = Math.min(90, Math.floor(360 / Math.max(1, order.length - 1)));
+    order.forEach((nodeId, i) => setTimeout(() => pulseClass(nodeId, "is-win-pulsing"), i * step));
+  }
+
+  // Brief red flash + shake on the whole board when a life is lost — the most
+  // consequential event should be the most felt (previously it had no board cue).
+  function strikeFlash() {
+    restartClass(svgEl, "is-strike");
+    svgEl.addEventListener("animationend", () => svgEl.classList.remove("is-strike"), { once: true });
   }
 
   // Drop the win styling (target back to red, ghost back) without rebuilding —
@@ -329,7 +343,7 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
     svgEl.classList.remove("is-won");
   }
 
-  return { update, markLegal, shakeEdge, pulseNode: pulse, winCascade, clearWin };
+  return { update, markLegal, shakeEdge, pulseNode: pulse, winCascade, clearWin, strikeFlash };
 }
 
 // --- helpers operating on a config -------------------------------------------

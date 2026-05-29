@@ -11,7 +11,7 @@ import { generateLock, makeRng } from "./generator.js";
 
 const STRIKES_MAX = 3;
 const STORAGE_BEST = "the-lock:rush-best";
-const SOLVE_DELAY = 650; // ms to savour a solve before the next lock
+const SOLVE_DELAY = 900; // ms to savour a solve before the next lock (fits the win cascade)
 const STRIKE_DELAY = 850; // ms to register a strike
 
 // Move budget for a lock of optimal `par`: always > par so a clean solve fits,
@@ -45,6 +45,7 @@ export function createRush({ mountEl, seed, onGameOver }) {
   const strikesEl = mountEl.querySelector("#rush-strikes");
   const movesEl = mountEl.querySelector("#rush-moves");
   const btnSkip = mountEl.querySelector("#btn-skip");
+  const toastEl = mountEl.querySelector("#rush-toast");
 
   const rng = makeRng(seed >>> 0);
   let solved = 0;
@@ -58,6 +59,7 @@ export function createRush({ mountEl, seed, onGameOver }) {
   let over = false;
   let lastHead = ""; // gadget of the previous board, so the next is a different kind
   let pending = null; // the one in-flight transition timer (solve/strike -> next)
+  let toastTimer = null; // transient toast auto-hide timer
 
   function generate(d) {
     // Pass the previous gadget so the next board is a DIFFERENT kind (no two
@@ -74,8 +76,20 @@ export function createRush({ mountEl, seed, onGameOver }) {
   }
   function updateHUD() {
     if (scoreEl) scoreEl.textContent = String(solved);
-    if (movesEl) movesEl.textContent = moves + " / " + budget;
+    if (movesEl) {
+      movesEl.textContent = moves + " / " + budget;
+      movesEl.classList.toggle("low", budget > 0 && budget - moves <= 2); // amber warning near the cap
+    }
     renderStrikes();
+  }
+
+  // Brief toast over the board (e.g. the skip cost). Auto-hides.
+  function showToast(msg) {
+    if (!toastEl) return;
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove("show"), 1100);
   }
 
   function loadNext() {
@@ -121,6 +135,9 @@ export function createRush({ mountEl, seed, onGameOver }) {
     strikes++;
     locked = true;
     renderStrikes();
+    if (board) board.strikeFlash();           // red flash + shake on the board
+    if (strikesEl) { strikesEl.classList.remove("struck"); void strikesEl.offsetWidth; strikesEl.classList.add("struck"); }
+    try { if (navigator.vibrate) navigator.vibrate(60); } catch (_) {}
     if (strikes >= STRIKES_MAX) {
       pending = setTimeout(gameOver, STRIKE_DELAY);
     } else {
@@ -143,6 +160,7 @@ export function createRush({ mountEl, seed, onGameOver }) {
 
   function onSkip() {
     if (over || locked) return;
+    showToast("SKIPPED · −1 life");
     strike();
   }
 
@@ -155,6 +173,7 @@ export function createRush({ mountEl, seed, onGameOver }) {
     destroy() {
       over = true; // stop any in-flight transition from acting on a dead run
       if (pending) { clearTimeout(pending); pending = null; }
+      if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
       if (btnSkip) btnSkip.removeEventListener("click", onSkip);
     },
     get score() { return solved; },
