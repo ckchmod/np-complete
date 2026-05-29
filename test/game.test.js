@@ -260,3 +260,26 @@ test("game: corrupt or legacy progress is ignored and the board starts fresh", a
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// Regression: the board <svg> is reused across locks. winCascade() adds .is-won
+// (which paints the target in the WIN colour); a fresh board must CLEAR it, or
+// the next lock's red target would render win-coloured (cyan) instead of red.
+// ---------------------------------------------------------------------------
+
+test("render: a fresh board clears a stale is-won (next target stays red)", async () => {
+  const prevDoc = globalThis.document;
+  const prevRaf = globalThis.requestAnimationFrame;
+  globalThis.document = { createElementNS: () => fakeEl() };
+  globalThis.requestAnimationFrame = () => 0;
+  try {
+    const { createBoard } = await import("../src/render.js");
+    const svg = fakeEl();
+    svg.classList.add("is-won"); // simulate the previous lock having been solved
+    createBoard(svg, makeConfig(tut1), {}); // build the next lock on the same <svg>
+    assert.equal(svg.classList.contains("is-won"), false, "stale win state must be cleared");
+  } finally {
+    globalThis.document = prevDoc;
+    globalThis.requestAnimationFrame = prevRaf;
+  }
+});

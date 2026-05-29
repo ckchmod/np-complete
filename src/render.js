@@ -160,6 +160,7 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
   let current = config;
 
   svgEl.classList.add("board");
+  svgEl.classList.remove("is-won"); // reset win state; this <svg> is reused per lock
   svgEl.setAttribute("viewBox", computeViewBox(config.level));
   svgEl.setAttribute("preserveAspectRatio", "xMidYMid meet");
   while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
