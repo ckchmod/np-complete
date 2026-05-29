@@ -20,9 +20,11 @@ export function moveBudget(par) {
   return par + Math.max(3, Math.round(par * 0.5));
 }
 
-// Difficulty ramps with locks solved: every 3 solves bumps the tier.
+// Difficulty ramps with EVERY solve: each win bumps the tier, so complexity
+// rises lock-to-lock (the generator caps its length budget, so par plateaus
+// gently rather than running away).
 export function difficultyFor(solved) {
-  return 1 + Math.floor(solved / 3);
+  return 1 + solved;
 }
 
 function loadBest() {
@@ -54,14 +56,15 @@ export function createRush({ mountEl, seed, onGameOver }) {
   let budget = 0;
   let locked = false; // input frozen during solve/strike transitions
   let over = false;
+  let lastHead = ""; // gadget of the previous board, so the next is a different kind
   let pending = null; // the one in-flight transition timer (solve/strike -> next)
 
   function generate(d) {
-    for (let i = 0; i < 8; i++) {
-      const L = generateLock(d, rng);
-      if (L) return L;
-    }
-    return generateLock(1, rng); // fallback (generator is ~100%, this is belt-and-braces)
+    // Pass the previous gadget so the next board is a DIFFERENT kind (no two
+    // near-identical boards in a row). generateLock retries + verifies internally.
+    const L = generateLock(d, rng, lastHead) || generateLock(1, rng);
+    if (L) lastHead = L.head;
+    return L;
   }
 
   function renderStrikes() {

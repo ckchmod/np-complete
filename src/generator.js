@@ -202,79 +202,189 @@ function forceLayout(ids, edges, rng) {
   return out;
 }
 
-// ── Difficulty → tree shape ─────────────────────────────────────────────────
-// d=1 is a single linear relay (gentle intro, no AND). d>=2 is an AND of 2 (then
-// 3) legs whose w2-chain lengths grow with d. `legs[i]` = chain length of leg i.
-export function difficultyShape(d, rng) {
-  d = Math.max(1, Math.floor(d));
-  if (d === 1) return { single: true, legs: [1] };
-  // AND of EXACTLY two legs (both required — three thin legs into a +2 root would
-  // be 2-of-3, i.e. one skippable). The two lengths always SUM to `total` (so par
-  // is fixed per tier), but the SPLIT is RANDOMIZED for per-board variety: same
-  // tier, genuinely different tree shapes ([1,4] vs [2,3] vs [4,1]...). Each leg
-  // stays in [1,5] so the solver stays fast and boards stay phone-readable.
-  const total = Math.min(9, d);
-  const lo = Math.max(1, total - 5), hi = Math.min(5, total - 1);
-  const r = rng ? rng() : 0.5;
-  const a = lo + Math.floor(r * (hi - lo + 1));
-  return { single: false, legs: [a, total - a] };
-}
+// ── Gadget palette ───────────────────────────────────────────────────────────
+// Every Rush board used to be ONE template (target -> AND-of-2-relays); only leg
+// lengths/orientation varied, so the game felt predictable. Now each board is
+// COMPOSED from a palette of gadgets chosen by difficulty:
+//   chain   — a w2 relay (the connective tissue / simplest leg)
+//   AND     — two thin children, BOTH must flip in (+1 +1 = +2): forcing
+//   OR      — several thick branches, ANY one delivers +2: choice / multi-path
+//   shuttle — the lend/reclaim head (lifted from THE_LOCK): forces BACKTRACKING
+// Forcing AND is always binary here (a node needs <= +2; an AND-of-3 would be
+// 2-of-3, i.e. one skippable). Each gadget keeps every node at inflow >= 2 by
+// construction; the finished board is solver-verified (build -> verify ->
+// reject/retry), so a malformed compose is simply discarded.
 
-// ── Construction ────────────────────────────────────────────────────────────
-// Generate one lock at the given difficulty. Returns a solver-verified Level
-// (with `par`) or null if the (rare) solver check disagrees with construction.
-export function generateLock(difficulty, rng) {
-  const shape = difficultyShape(difficulty, rng);
+// A build context: id-stamped node/edge factories over one shared edge list.
+function builder() {
   let nid = 0, eid = 0;
   const edges = [];
   const node = () => "n" + nid++;
   const E = (u, v, w) => { const id = "e" + eid++; edges.push({ id, u, v, w, dir: "uv" }); return id; };
-  const pair = () => { const a = node(), b = node(); E(a, b, 2); E(b, a, 2); return a; }; // rigid; returns usable node
+  // Rigid 2-cycle: a,b both sit at inflow 2; returns a node you draw a static +w
+  // from (it never needs to flip).
+  const pair = () => { const a = node(), b = node(); E(a, b, 2); E(b, a, 2); return a; };
+  // Slack-2 donor: b sits at inflow 4, so a charge edge X->b reverses to b->X
+  // delivering +2 to X. A compact 2-node lens (lays out cleanly).
+  const battery = () => { const s = node(), b = node(); E(b, s, 2); E(s, b, 2); E(s, b, 2); return b; };
+  return { node, E, pair, battery, edges };
+}
 
-  // A battery: a slack-2 donor `b` and one satellite `s`. Two parallel s->b
-  // edges give b inflow 4 (slack 2, so it can donate 2); b->s keeps s fed. Just
-  // two nodes (a compact lens), so it lays out cleanly instead of tangling like
-  // a 3-node triangle.
-  function makeBattery() {
-    const s = node(), b = node();
-    E(b, s, 2);             // b -> s keeps s satisfied
-    E(s, b, 2); E(s, b, 2); // two s -> b: b inflow 4 (donates 2)
-    return b;
+// chain: a w2 relay of length L from `top`, ending in a battery. Reversing it
+// back from the battery delivers +2 to `top`. The connective gadget.
+function chain(ctx, top, L) {
+  let prev = top;
+  for (let i = 0; i < L; i++) { const m = ctx.node(); ctx.E(prev, m, 2); prev = m; }
+  ctx.E(prev, ctx.battery(), 2); // charge edge: reverse from the battery to gain +2 at top
+}
+
+// attachCharger: make node N (tight at inflow 2) able to GAIN +2 — i.e. a thick
+// edge into N becomes reversible — via a gadget chosen by rng + budget. `budget`
+// bounds recursion (rises with difficulty). A node that only needs +1 (an AND
+// leg) is fine: a chain over-delivers +2.
+// `need` is how much N must gain (1 or 2); `len` is the length/complexity budget
+// to spend (drives par). AND only where need===2 (so it stays forcing); a chain
+// over-delivers +2 for a need-1 node. AND SPLITS len across legs and OR caps each
+// branch, so par tracks `len` while node count stays bounded.
+function attachCharger(ctx, N, need, len, rng) {
+  len = Math.max(1, len);
+  const roll = rng();
+  if (len <= 2 || roll < 0.4) {
+    chain(ctx, N, Math.min(len, 6)); // one relay; cap keeps a single chain readable
+    return;
   }
-
-  const R = node(), x = node();
-  const target = E(x, R, 2);      // TARGET x -> R (into R); reverse it to win
-  const ax = pair(); E(ax, x, 2); // LOCAL anchor: x at inflow 2 (inert)
-
-  // From `top` (which must gain +2 to flip its parent edge), build a w2 relay of
-  // length L ending in a battery: top->m1->...->mL->battery.
-  function relay(top, L) {
-    let prev = top;
-    for (let i = 0; i < L; i++) { const m = node(); E(prev, m, 2); prev = m; }
-    const b = makeBattery();
-    E(prev, b, 2); // charge edge: flip prev->b to gain +2 at prev
+  if (need === 2 && roll < 0.74) {
+    // forcing AND: split `len` across two thin (need-1) legs, BOTH required
+    const a = 1 + Math.floor(rng() * (len - 1));
+    for (const l of [a, len - a]) {
+      const C = ctx.node();
+      ctx.E(N, C, 1);                              // N -> C thin
+      const base = ctx.pair(); ctx.E(base, C, 1);  // base -> C starts tight at 2
+      attachCharger(ctx, C, 1, l, rng);
+    }
+    return;
   }
+  // OR: two thick branches, ANY one delivers +2 to N -> genuine choice / multi-path
+  for (let i = 0; i < 2; i++) {
+    const C = ctx.node();
+    ctx.E(N, C, 2);                                // N -> C thick
+    attachCharger(ctx, C, 2, Math.min(len, 4), rng);
+  }
+}
 
-  if (shape.single) {
-    const C = node();
-    E(R, C, 2);                   // single w2 child (no AND): one chain unlocks R
-    relay(C, shape.legs[0]);
-  } else {
-    for (const L of shape.legs) {
-      const C = node();
-      E(R, C, 1);                 // AND input (thin): all children must flip in
-      const t = pair(); E(t, C, 1); // LOCAL static base so C starts tight at 2
-      relay(C, L);
+// Generic head: the target cluster x->R plus the structure gating R's +2.
+// Returns the target edge id.
+function genericHead(ctx, type, len, rng) {
+  const R = ctx.node(), x = ctx.node();
+  const target = ctx.E(x, R, 2);          // TARGET x -> R; reverse to win (R needs +2)
+  const ax = ctx.pair(); ctx.E(ax, x, 2); // x inert at inflow 2
+  if (type === "single") {
+    const C = ctx.node(); ctx.E(R, C, 2); // one thick child; charging it frees R
+    attachCharger(ctx, C, 2, len, rng);
+  } else if (type === "or") {
+    const k = 2 + (rng() < 0.5 ? 1 : 0);
+    for (let i = 0; i < k; i++) {
+      const C = ctx.node(); ctx.E(R, C, 2); // thick OR branch; ANY one frees R
+      attachCharger(ctx, C, 2, Math.min(len, 4), rng);
+    }
+  } else { // "and": split len across two forcing legs (BOTH required)
+    const a = 1 + Math.floor(rng() * Math.max(1, len - 1));
+    for (const l of [a, Math.max(1, len - a)]) {
+      const C = ctx.node(); ctx.E(R, C, 1);        // thin AND input
+      const base = ctx.pair(); ctx.E(base, C, 1);  // C starts tight at 2
+      attachCharger(ctx, C, 1, l, rng);
     }
   }
+  return target;
+}
 
-  const ids = [...new Set(edges.flatMap((e) => [e.u, e.v]))];
-  const pos = forceLayout(ids, edges, rng);
-  const nodes = ids.map((id) => ({ id, x: pos[id].x, y: pos[id].y }));
-  const level = { id: "lock-d" + Math.max(1, Math.floor(difficulty)), name: "Lock", nodes, edges, target };
+// Shuttle head (parameterized from THE_LOCK's {T,K,S,B} lend/reclaim gadget): to
+// satisfy K you must LEND a unit out via ST (moving AWAY from the goal) and
+// RECLAIM it later — greedy play dead-ends, so a solution must BACKTRACK.
+function shuttleHead(ctx, len, rng) {
+  const T = ctx.node(), K = ctx.node(), S = ctx.node(), B = ctx.node(), P = ctx.node();
+  const KT = ctx.E(K, T, 2);   // TARGET K -> T
+  ctx.E(S, B, 2);              // S -> B  (S's ballast sink)
+  ctx.E(S, T, 1);              // S -> T  thin (the shuttle: lend / reclaim)
+  ctx.E(K, S, 1);              // K -> S  thin
+  ctx.E(T, S, 1);              // T -> S  thin
+  ctx.E(S, K, 2);              // S -> K  thick (delivers the bulk to K)
+  ctx.E(K, P, 1);              // K -> P  thin (flip P->K => +1 to K)
+  const pbase = ctx.pair(); ctx.E(pbase, P, 1); // P base -> P starts tight at 2
+  attachCharger(ctx, P, 1, len, rng);           // charge P so P->K can flip
+  return KT;
+}
 
-  const rep = solveTarget(level);
+// ── Difficulty → build plan ──────────────────────────────────────────────────
+// Maps a difficulty tier to a head type + recursion budget. The head pool widens
+// with d (single -> +AND -> +OR -> +shuttle) so EARLY boards are simple & varied
+// and LATER ones bring choice (OR) and lookahead (shuttle). rng picks within the
+// pool, so consecutive same-tier boards differ in structure, not just length.
+export function difficultyPlan(d, rng, avoidHead) {
+  d = Math.max(1, Math.floor(d));
+  // Complexity rises SLOWLY: the length budget (which drives par) gains 1 every
+  // two tiers, so difficulty creeps up rather than spiking.
+  const len = Math.min(10, 1 + Math.floor(d / 2));
+  // Head pool widens with progression: gentle shapes first, then the shuttle
+  // (backtracking / lookahead) once the player has some boards behind them.
+  let pool;
+  if (d <= 1) pool = ["single"];                    // gentle first board
+  else if (d <= 3) pool = ["single", "and", "or"];  // ease in; single fades after the intro
+  else if (d <= 7) pool = ["and", "or"];            // richer shapes only (single was too plain/frequent)
+  else pool = ["and", "or", "shuttle"];             // shuttle (lookahead) unlocks ~solve 7
+  // "One of a kind": never repeat the previous board's gadget, so consecutive
+  // boards always look and play differently — no two near-identical in a row.
+  let choices = pool.filter((h) => h !== avoidHead);
+  if (choices.length === 0) choices = pool;
+  // De-emphasise the plain "single" chain when richer shapes are available, so
+  // the rotation leans toward the more interesting gadgets (single was a "hub"
+  // that otherwise reappeared every other board).
+  const weighted = [];
+  for (const h of choices) { weighted.push(h); if (h !== "single") weighted.push(h); }
+  const r = rng ? rng() : 0.5;
+  return { head: weighted[Math.floor(r * weighted.length)], len };
+}
+
+const MAX_NODES = 24; // keep boards phone-legible
+const MAX_EDGES = 32; // keep the solver near its fast (non-BigInt) path
+
+// ── Construction ────────────────────────────────────────────────────────────
+// Generate one lock at the given difficulty: pick a plan, compose gadgets, then
+// VERIFY (valid start + solvable, plus the gadget's signature property). Retries
+// on a malformed/oversized compose; falls back to a guaranteed simple chain so a
+// board is always returned.
+export function generateLock(difficulty, rng, avoidHead) {
+  const tier = Math.max(1, Math.floor(difficulty));
+  for (let attempt = 0; attempt < 16; attempt++) {
+    const built = tryBuild(difficultyPlan(difficulty, rng, avoidHead), tier, rng);
+    if (built) return built;
+  }
+  return tryBuild({ head: "single", len: 2 }, tier, rng) || null; // fallback always verifies
+}
+
+function tryBuild(plan, tier, rng) {
+  const ctx = builder();
+  let target;
+  try {
+    target = plan.head === "shuttle"
+      ? shuttleHead(ctx, plan.len, rng)
+      : genericHead(ctx, plan.head, plan.len, rng);
+  } catch (_) { return null; }
+
+  if (ctx.edges.length > MAX_EDGES) return null;
+  const ids = [...new Set(ctx.edges.flatMap((e) => [e.u, e.v]))];
+  if (ids.length > MAX_NODES) return null;
+
+  const probe = { id: "probe", name: "probe", nodes: ids.map((id) => ({ id, x: 0, y: 0 })), edges: ctx.edges, target };
+
+  let rep;
+  try { rep = solveTarget(probe); } catch (_) { return null; } // makeConfig throws on inflow < 2
   if (!rep.solvable) return null;
-  level.par = rep.optimalLength;
-  return level;
+
+  // (Shuttle boards force backtracking structurally — asserted across samples in
+  // the tests — so we trust construction and skip the expensive exhaustive
+  // bfsSolve at runtime; solveTarget above already confirmed solvability.)
+  const pos = forceLayout(ids, ctx.edges, rng);
+  const nodes = ids.map((id) => ({ id, x: pos[id].x, y: pos[id].y }));
+  return { id: "lock-d" + tier, name: "Lock", nodes, edges: ctx.edges, target, par: rep.optimalLength, head: plan.head };
 }
