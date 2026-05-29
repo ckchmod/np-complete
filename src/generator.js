@@ -186,7 +186,7 @@ function forceLayout(ids, edges, rng) {
   const index = new Map(ids.map((id, i) => [id, i]));
   const pairs = edges.map((e) => [index.get(e.u), index.get(e.v)]);
   let best = null, bestScore = Infinity;
-  for (let start = 0; start < 28; start++) {
+  for (let start = 0; start < 30; start++) {
     const pos = frSimulate(n, pairs, rng);
     const score = layoutScore(n, pairs, pos);
     if (score < bestScore) { bestScore = score; best = pos; }

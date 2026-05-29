@@ -68,7 +68,7 @@
     <div id="result-card" class="result-card hidden" role="dialog" aria-modal="true" aria-label="Puzzle solved">
       <div class="result-inner">
         <div class="result-stars" id="result-stars">★★★</div>
-        <div class="result-title">SOLVED</div>
+        <div class="result-title">UNLOCKED</div>
         <div class="result-row"><span class="result-label">Moves</span><span class="result-value" id="result-moves">—</span></div>
         <div class="result-row"><span class="result-label">Optimal</span><span class="result-value" id="result-par">—</span></div>
         <div class="result-row"><span class="result-label">Score</span><span class="result-value" id="result-score">—</span></div>
@@ -99,11 +99,12 @@
     <div id="intro" class="overlay" role="dialog" aria-modal="true" aria-label="How to play">
       <div class="overlay-card">
         <div class="intro-logo">THE LOCK</div>
-        <p class="intro-goal">Reverse the <span class="intro-red">red</span> arrow.</p>
+        <p class="intro-goal">Open the lock — reverse the <span class="intro-red">red</span> arrow.</p>
         <ul class="intro-rules">
           <li>Tap an arrow to flip its direction.</li>
           <li>Every node must always have at least <b>2</b> arrows pointing in — a thin arrow counts <b>1</b>, a thick arrow counts <b>2</b>.</li>
           <li>You can only flip an arrow if every node stays satisfied.</li>
+          <li>A faint outline marks where the <span class="intro-red">red</span> arrow must end up.</li>
         </ul>
         <p class="intro-foot">A few quick puzzles teach you the rest, then pick as many locks as you can.</p>
         <button id="btn-start" class="btn btn-primary">Start</button>

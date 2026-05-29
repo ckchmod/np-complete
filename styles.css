@@ -157,6 +157,17 @@ html, body {
 .edge-group.is-target .edge-line  { stroke: var(--c-target); }
 .edge-group.is-target .edge-arrow { fill: var(--c-target); }
 
+/* Ghost goal marker: a faint red arrowhead at the end the target must point to,
+   so "reverse the red arrow" is visible — you can see where it has to end up. */
+.edge-ghost {
+  fill: none;
+  stroke: var(--c-target);
+  stroke-width: 0.7;
+  stroke-linejoin: round;
+  opacity: 0.6;
+  transition: opacity var(--transition);
+}
+
 /* Legal (flippable) affordance */
 .edge-group.is-legal { filter: drop-shadow(0 0 2px var(--c-legal)); }
 
@@ -242,6 +253,12 @@ html, body {
 .board.is-won .node-glow {
   stroke: var(--c-win);
 }
+
+/* Unlocked: on a solve the target arrow snaps from red to the win colour and the
+   ghost marker fades — the bolt "throws" into place. */
+.board.is-won .edge-group.is-target .edge-line  { stroke: var(--c-win); }
+.board.is-won .edge-group.is-target .edge-arrow { fill: var(--c-win); }
+.board.is-won .edge-ghost { opacity: 0; }
 
 /* ── Hint ─────────────────────────────────────────────────────────────────── */
 

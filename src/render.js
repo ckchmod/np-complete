@@ -190,6 +190,14 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
     const arrow = el("path", { class: "edge-arrow", d: arrowPathFor(curve, toEnd, dim.len, dim.half) });
     const hit = el("path", { class: "edge-hit", d: curvePath(curve) });
 
+    if (config.level.target === edge.id) {
+      // Ghost marker: a faint arrowhead at the GOAL end (the reverse of the start
+      // direction) so the player can SEE where the red arrow must end up. Drawn
+      // first, behind the live line/arrow, which covers it once the target flips.
+      const goalEnd = edge.dir === "uv" ? "A" : "B";
+      const ghost = el("path", { class: "edge-ghost", d: arrowPathFor(curve, goalEnd, dim.len, dim.half) });
+      group.appendChild(ghost);
+    }
     group.appendChild(line);
     group.appendChild(arrow);
     group.appendChild(hit);
