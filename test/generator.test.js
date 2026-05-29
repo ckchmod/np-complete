@@ -1,8 +1,34 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { makeConfig, inflow, isLegalFlip } from "../src/engine.js";
+import { basicMetrics, allMetrics } from "../src/difficultyMetrics.js";
 import { bfsSolve, nonTrivialityReport } from "../src/solver.js";
-import { generateLock, makeRng } from "../src/generator.js";
+import {
+  GENERATED_GADGET_THRESHOLDS,
+  difficultyPlan,
+  generateLock,
+  makeRng,
+} from "../src/generator.js";
+
+const newGadgetHeads = new Set(["latch", "mutex", "cyclePump", "battery", "sharedReservoir"]);
+
+function sequenceSummary(difficulty, seed, count) {
+  const rng = makeRng(seed);
+  const rows = [];
+  let avoidHead = "";
+  for (let i = 0; i < count; i++) {
+    const level = generateLock(difficulty, rng, avoidHead);
+    avoidHead = level.head;
+    rows.push({
+      head: level.head,
+      par: level.par,
+      nodes: level.nodes.length,
+      edges: level.edges.length,
+      metadata: level.metadata,
+    });
+  }
+  return rows;
+}
 
 test("generated boards are valid, target-locked, non-trivial, and bounded", () => {
   for (let d = 1; d <= 14; d++) {
@@ -16,7 +42,7 @@ test("generated boards are valid, target-locked, non-trivial, and bounded", () =
       assert.equal(isLegalFlip(c, L.target), false, "target not flippable on move 1");
       assert.ok(L.edges.some((e) => e.id === L.target), "target edge must exist");
       assert.ok(L.par >= 3, "non-trivial (par >= 3)");
-      assert.ok(L.nodes.length <= 24 && L.edges.length <= 32, "board stays phone-legible & solver-fast");
+      assert.ok(L.nodes.length <= 24 && L.edges.length <= 30, "board stays phone-legible & solver-fast");
     }
   }
 });
@@ -76,4 +102,82 @@ test("shuttle boards force backtracking (genuine lookahead, not greedy)", () => 
 
 test("generation is deterministic for a given seed", () => {
   assert.deepEqual(generateLock(6, makeRng(99)), generateLock(6, makeRng(99)));
+});
+
+test("new gadget thresholds keep low tiers classic and unlock richer heads at tiers 6 and 8", () => {
+  assert.deepEqual(GENERATED_GADGET_THRESHOLDS, { lowMax: 5, midStart: 6, highStart: 8 });
+  for (const roll of [0, 0.25, 0.5, 0.75, 0.99]) {
+    assert.equal(newGadgetHeads.has(difficultyPlan(5, () => roll).head), false, "tier 5 is classic-only");
+  }
+  assert.ok(["latch", "battery"].includes(difficultyPlan(6, () => 0.99).head), "tier 6 unlocks mid gadgets");
+  assert.equal(difficultyPlan(7, () => 0.99).head, "battery", "tier 7 is still mid-gadget only");
+  assert.equal(difficultyPlan(8, () => 0.7).head, "mutex", "tier 8 unlocks high gadgets");
+  assert.equal(difficultyPlan(8, () => 0.85).head, "cyclePump", "tier 8 includes cyclePump");
+  assert.equal(difficultyPlan(8, () => 0.99).head, "sharedReservoir", "tier 8 includes sharedReservoir");
+});
+
+test("difficulty 4 and 5 OR samples stay under the reachable-state sanity cap", () => {
+  for (const difficulty of [4, 5]) {
+    const seed = 20260529 + difficulty * 100 + 5;
+    const level = generateLock(difficulty, makeRng(seed));
+    const metrics = allMetrics(level);
+    assert.ok(metrics.reachableCount < 100000,
+      `tier ${difficulty} seed ${seed} reachableCount ${metrics.reachableCount}`);
+  }
+});
+
+test("generated high-difficulty boards include new gadget metadata while low tiers do not", () => {
+  const low = sequenceSummary(3, 20260529, 10);
+  assert.equal(low.some((row) => newGadgetHeads.has(row.head)), false, "tier 3 excludes new gadgets");
+  assert.ok(low.every((row) => row.metadata.gadgetFamilies.length === 0), "classic heads have empty gadget metadata");
+
+  const high = sequenceSummary(10, 20260529, 20);
+  const newRows = high.filter((row) => newGadgetHeads.has(row.head));
+  assert.ok(newRows.length > 0, "tier 10 samples at least one new gadget");
+  for (const row of newRows) {
+    assert.deepEqual(row.metadata.gadgetFamilies, [row.head]);
+    assert.equal(row.metadata.sourceFixture, `gadget-${row.head}`);
+  }
+});
+
+test("seeded generation sequence preserves head, count, and metadata determinism", () => {
+  assert.deepEqual(sequenceSummary(10, 12345, 10), sequenceSummary(10, 12345, 10));
+});
+
+test("diagnostic metrics are opt-in and match the shared metrics helpers", () => {
+  let called = false;
+  const silent = generateLock(6, makeRng(31415), "", {
+    onDiagnostics: () => { called = true; },
+  });
+  assert.ok(silent);
+  assert.equal(called, false, "diagnostics stay off unless explicitly enabled");
+
+  let payload = null;
+  const loud = generateLock(6, makeRng(31415), "", {
+    diagnostics: "all",
+    onDiagnostics: (value) => { payload = value; },
+  });
+  assert.ok(loud);
+  assert.deepEqual(payload, { head: loud.head, ...allMetrics(loud) });
+  assert.deepEqual(basicMetrics(loud), {
+    reachableCount: payload.reachableCount,
+    diameter: payload.diameter,
+    branchingFactor: payload.branchingFactor,
+    goalCount: payload.goalCount,
+    shortestPathCount: payload.shortestPathCount,
+    deadEndCount: payload.deadEndCount,
+    par: payload.par,
+    partial: payload.partial,
+  });
+
+  const originalLog = console.log;
+  const logged = [];
+  try {
+    console.log = (value) => { logged.push(value); };
+    const debugLevel = generateLock(6, makeRng(31415), "", { debug: true });
+    assert.equal(logged.length, 1, "debug mode logs exactly once");
+    assert.deepEqual(JSON.parse(logged[0]), { head: debugLevel.head, ...basicMetrics(debugLevel) });
+  } finally {
+    console.log = originalLog;
+  }
 });

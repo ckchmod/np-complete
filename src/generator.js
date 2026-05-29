@@ -13,6 +13,14 @@
 // the layout. Every board is solver-verified (solvable, optimal == par) first.
 
 import { solveTarget } from "./solver.js";
+import { basicMetrics, allMetrics } from "./difficultyMetrics.js";
+import {
+  buildBattery,
+  buildCyclePump,
+  buildLatch,
+  buildMutex,
+  buildSharedReservoir,
+} from "./gadgetBuilders.js";
 
 // Seedable PRNG (mulberry32): reproducible runs for sharing/fairness.
 export function makeRng(seed) {
@@ -210,6 +218,8 @@ function forceLayout(ids, edges, rng) {
 //   AND     — two thin children, BOTH must flip in (+1 +1 = +2): forcing
 //   OR      — several thick branches, ANY one delivers +2: choice / multi-path
 //   shuttle — the lend/reclaim head (lifted from THE_LOCK): forces BACKTRACKING
+//   latch/battery/mutex/cyclePump/sharedReservoir — compact mappings of the
+//              standalone gadget-builder families, unlocked only after tier 5
 // Forcing AND is always binary here (a node needs <= +2; an AND-of-3 would be
 // 2-of-3, i.e. one skippable). Each gadget keeps every node at inflow >= 2 by
 // construction; the finished board is solver-verified (build -> verify ->
@@ -236,6 +246,13 @@ function chain(ctx, top, L) {
   let prev = top;
   for (let i = 0; i < L; i++) { const m = ctx.node(); ctx.E(prev, m, 2); prev = m; }
   ctx.E(prev, ctx.battery(), 2); // charge edge: reverse from the battery to gain +2 at top
+}
+
+function targetCluster(ctx) {
+  const R = ctx.node(), x = ctx.node();
+  const target = ctx.E(x, R, 2);
+  const ax = ctx.pair(); ctx.E(ax, x, 2);
+  return { R, target };
 }
 
 // attachCharger: make node N (tight at inflow 2) able to GAIN +2 — i.e. a thick
@@ -278,14 +295,13 @@ function attachCharger(ctx, N, need, len, rng) {
 // Generic head: the target cluster x->R plus the structure gating R's +2.
 // Returns the target edge id.
 function genericHead(ctx, type, len, rng) {
-  const R = ctx.node(), x = ctx.node();
-  const target = ctx.E(x, R, 2);          // TARGET x -> R; reverse to win (R needs +2)
-  const ax = ctx.pair(); ctx.E(ax, x, 2); // x inert at inflow 2
+  const { R, target } = targetCluster(ctx);
   if (type === "single") {
     const C = ctx.node(); ctx.E(R, C, 2); // one thick child; charging it frees R
     attachCharger(ctx, C, 2, len, rng);
   } else if (type === "or") {
-    const k = 2 + (rng() < 0.5 ? 1 : 0);
+    rng();
+    const k = 2;
     for (let i = 0; i < k; i++) {
       const C = ctx.node(); ctx.E(R, C, 2); // thick OR branch; ANY one frees R
       chain(ctx, C, Math.min(len, 4));        // bounded chain per branch (see attachCharger OR)
@@ -301,6 +317,61 @@ function genericHead(ctx, type, len, rng) {
       const base = ctx.pair(); ctx.E(base, C, 1);  // C starts tight at 2
       attachCharger(ctx, C, 1, l, rng);
     }
+  }
+  return target;
+}
+
+function latchHead(ctx, len, rng) {
+  const { R, target } = targetCluster(ctx);
+  const gate = ctx.node(), key = ctx.node();
+  ctx.E(R, gate, 2);
+  ctx.E(gate, key, 2);
+  attachCharger(ctx, key, 2, Math.min(len, 5), rng);
+  return target;
+}
+
+function batteryHead(ctx) {
+  const { R, target } = targetCluster(ctx);
+  const source = ctx.battery();
+  for (let i = 0; i < 2; i++) {
+    const relay = ctx.node(), output = ctx.node();
+    ctx.E(R, relay, 2);
+    ctx.E(relay, output, 2);
+    ctx.E(output, source, 2);
+  }
+  return target;
+}
+
+function mutexHead(ctx) {
+  const { R, target } = targetCluster(ctx);
+  const hub = ctx.node();
+  for (let i = 0; i < 2; i++) {
+    const relay = ctx.node(), port = ctx.node();
+    ctx.E(R, relay, 2);
+    ctx.E(relay, port, 2);
+    ctx.E(port, hub, 2);
+  }
+  return target;
+}
+
+function cyclePumpHead(ctx) {
+  const { R, target } = targetCluster(ctx);
+  const a = ctx.node(), b = ctx.node(), c = ctx.node();
+  ctx.E(R, a, 2);
+  ctx.E(a, b, 2);
+  ctx.E(b, c, 2);
+  ctx.E(a, c, 2);
+  return target;
+}
+
+function sharedReservoirHead(ctx) {
+  const { R, target } = targetCluster(ctx);
+  const reservoir = ctx.battery();
+  for (let i = 0; i < 2; i++) {
+    const child = ctx.node();
+    ctx.E(R, child, 1);
+    const base = ctx.pair(); ctx.E(base, child, 1);
+    ctx.E(child, reservoir, 1);
   }
   return target;
 }
@@ -323,10 +394,23 @@ function shuttleHead(ctx, len, rng) {
 }
 
 // ── Difficulty → build plan ──────────────────────────────────────────────────
+const INTEGRATED_GADGET_BUILDERS = Object.freeze({
+  latch: buildLatch,
+  battery: buildBattery,
+  mutex: buildMutex,
+  cyclePump: buildCyclePump,
+  sharedReservoir: buildSharedReservoir,
+});
+const MID_GADGETS = Object.freeze(["latch", "battery"]);
+const HIGH_GADGETS = Object.freeze(["mutex", "cyclePump", "sharedReservoir"]);
+const NEW_GADGET_HEADS = new Set([...MID_GADGETS, ...HIGH_GADGETS]);
+export const GENERATED_GADGET_THRESHOLDS = Object.freeze({ lowMax: 5, midStart: 6, highStart: 8 });
+
 // Maps a difficulty tier to a head type + recursion budget. The head pool widens
-// with d (single -> +AND -> +OR -> +shuttle) so EARLY boards are simple & varied
-// and LATER ones bring choice (OR) and lookahead (shuttle). rng picks within the
-// pool, so consecutive same-tier boards differ in structure, not just length.
+// with d (single -> +AND -> +OR -> +shuttle -> richer gadget families) so EARLY
+// boards are simple & varied and LATER ones bring choice, lookahead, and shared
+// resource patterns. New gadget families are excluded through tier 5, latch and
+// battery unlock at tier 6, and mutex/cyclePump/sharedReservoir unlock at tier 8.
 export function difficultyPlan(d, rng, avoidHead) {
   d = Math.max(1, Math.floor(d));
   // Complexity rises SLOWLY: the length budget (which drives par) gains 1 every
@@ -337,8 +421,9 @@ export function difficultyPlan(d, rng, avoidHead) {
   let pool;
   if (d <= 1) pool = ["single"];                    // gentle first board
   else if (d <= 3) pool = ["single", "and", "or"];  // ease in; single fades after the intro
-  else if (d <= 7) pool = ["and", "or"];            // richer shapes only (single was too plain/frequent)
-  else pool = ["and", "or", "shuttle"];             // shuttle (lookahead) unlocks ~solve 7
+  else if (d <= GENERATED_GADGET_THRESHOLDS.lowMax) pool = ["and", "or"];
+  else if (d < GENERATED_GADGET_THRESHOLDS.highStart) pool = ["and", "or", ...MID_GADGETS];
+  else pool = ["and", "or", "shuttle", ...MID_GADGETS, ...HIGH_GADGETS];
   // "One of a kind": never repeat the previous board's gadget, so consecutive
   // boards always look and play differently — no two near-identical in a row.
   let choices = pool.filter((h) => h !== avoidHead);
@@ -360,22 +445,56 @@ const MAX_EDGES = 30; // solver's fast (non-BigInt) path is edges <= 30 (see sol
 // VERIFY (valid start + solvable, plus the gadget's signature property). Retries
 // on a malformed/oversized compose; falls back to a guaranteed simple chain so a
 // board is always returned.
-export function generateLock(difficulty, rng, avoidHead) {
+export function generateLock(difficulty, rng, avoidHead, options = null) {
   const tier = Math.max(1, Math.floor(difficulty));
   for (let attempt = 0; attempt < 16; attempt++) {
     const built = tryBuild(difficultyPlan(difficulty, rng, avoidHead), tier, rng);
-    if (built) return built;
+    if (built) {
+      emitDiagnostics(built, options);
+      return built;
+    }
   }
-  return tryBuild({ head: "single", len: 2 }, tier, rng) || null; // fallback always verifies
+  const fallback = tryBuild({ head: "single", len: 2 }, tier, rng) || null; // fallback always verifies
+  if (fallback) emitDiagnostics(fallback, options);
+  return fallback;
+}
+
+function emitDiagnostics(level, options) {
+  if (!options || typeof options !== "object") return;
+  const mode = options.diagnostics ?? (options.debug ? "basic" : null);
+  if (!mode) return;
+  const advanced = mode === "all" || mode === "advanced";
+  const payload = diagnosticMetrics(level, { advanced });
+  if (typeof options.onDiagnostics === "function") options.onDiagnostics(payload);
+  if (options.debug || options.logDiagnostics) console.log(JSON.stringify(payload));
+}
+
+export function diagnosticMetrics(level, { advanced = false } = {}) {
+  const metrics = advanced ? allMetrics(level) : basicMetrics(level);
+  return { head: level.head, ...metrics };
+}
+
+function integratedHead(ctx, plan, rng) {
+  if (plan.head === "shuttle") return shuttleHead(ctx, plan.len, rng);
+  if (plan.head === "latch") return latchHead(ctx, plan.len, rng);
+  if (plan.head === "battery") return batteryHead(ctx);
+  if (plan.head === "mutex") return mutexHead(ctx);
+  if (plan.head === "cyclePump") return cyclePumpHead(ctx);
+  if (plan.head === "sharedReservoir") return sharedReservoirHead(ctx);
+  return genericHead(ctx, plan.head, plan.len, rng);
+}
+
+function rushMetadata(head) {
+  if (!NEW_GADGET_HEADS.has(head)) return { head, gadgetFamilies: [], sourceFixture: null };
+  const fixture = INTEGRATED_GADGET_BUILDERS[head]();
+  return { head, gadgetFamilies: [fixture.metadata.kind], sourceFixture: fixture.id };
 }
 
 function tryBuild(plan, tier, rng) {
   const ctx = builder();
   let target;
   try {
-    target = plan.head === "shuttle"
-      ? shuttleHead(ctx, plan.len, rng)
-      : genericHead(ctx, plan.head, plan.len, rng);
+    target = integratedHead(ctx, plan, rng);
   } catch (_) { return null; }
 
   if (ctx.edges.length > MAX_EDGES) return null;
@@ -393,5 +512,14 @@ function tryBuild(plan, tier, rng) {
   // bfsSolve at runtime; solveTarget above already confirmed solvability.)
   const pos = forceLayout(ids, ctx.edges, rng);
   const nodes = ids.map((id) => ({ id, x: pos[id].x, y: pos[id].y }));
-  return { id: "lock-d" + tier, name: "Lock", nodes, edges: ctx.edges, target, par: rep.optimalLength, head: plan.head };
+  return {
+    id: "lock-d" + tier,
+    name: "Lock",
+    nodes,
+    edges: ctx.edges,
+    target,
+    par: rep.optimalLength,
+    head: plan.head,
+    metadata: rushMetadata(plan.head),
+  };
 }
