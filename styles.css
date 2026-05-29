@@ -21,6 +21,13 @@
   --c-target:    #ff3333;
   --c-legal:     #00d4ff;
   --c-slack:     #ffaa00;
+  --c-owner-white: #a7f6ff;
+  --c-owner-black: #ffc46b;
+  --c-charge-bg: rgba(9, 9, 14, 0.86);
+  --charge-stroke: 0.55;
+  --charge-text: 3.8px;
+  --battle-dim: 0.18;
+  --battle-target-dim: 0.72;
   --c-win:       #00d4ff;
   --font-mono:   'DM Mono', 'Courier New', monospace;
   --font-label:  'Space Mono', monospace;
@@ -266,9 +273,59 @@ html, body {
    confusing "cyan under the red". */
 .edge-group.is-legal:not(.is-target) { filter: drop-shadow(0 0 4px var(--c-legal)); }
 
+.board.is-battle .edge-group.is-legal {
+  filter: drop-shadow(0 0 6px var(--c-legal));
+}
+
+.board.is-battle .edge-group.is-owner-white:not(.is-target) .edge-line {
+  stroke: var(--c-owner-white);
+}
+
+.board.is-battle .edge-group.is-owner-white:not(.is-target) .edge-arrow {
+  fill: var(--c-owner-white);
+}
+
+.board.is-battle .edge-group.is-owner-black:not(.is-target) .edge-line {
+  stroke: var(--c-owner-black);
+}
+
+.board.is-battle .edge-group.is-owner-black:not(.is-target) .edge-arrow {
+  fill: var(--c-owner-black);
+}
+
+.edge-charge {
+  pointer-events: none;
+}
+
+.edge-charge-bg {
+  fill: var(--c-charge-bg);
+  stroke: currentColor;
+  stroke-width: var(--charge-stroke);
+}
+
+.edge-charge-text {
+  fill: var(--c-white);
+  font-family: var(--font-label);
+  font-size: var(--charge-text);
+  font-weight: 700;
+  line-height: 1;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+.board.is-battle .edge-group.is-owner-white { color: var(--c-owner-white); }
+.board.is-battle .edge-group.is-owner-black { color: var(--c-owner-black); }
+.board.is-battle .edge-group.is-owner-neutral { color: var(--c-grey); }
+.board.is-battle .edge-group.is-spent .edge-charge-bg { stroke: var(--c-dim); }
+.board.is-battle .edge-group.is-spent .edge-charge-text { fill: var(--c-grey); }
+
 /* Dim non-legal edges (applied to the whole group so the line and head don't
    double-composite into a darker sliver where they meet). */
 .board:not(.no-legal) .edge-group:not(.is-legal):not(.is-target) { opacity: 0.22; }
+
+.board.is-battle .edge-group.is-opponent:not(.is-target):not(.is-target-b) { opacity: var(--battle-dim); }
+.board.is-battle .edge-group.is-opponent.is-target,
+.board.is-battle .edge-group.is-opponent.is-target-b { opacity: var(--battle-target-dim); }
 
 /* Shake animation for illegal tap */
 @keyframes shake {

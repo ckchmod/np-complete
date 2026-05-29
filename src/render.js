@@ -26,6 +26,8 @@ const ARROW_MAX_LEN = 4.8; // longest arrowhead (thick) — for viewBox padding
 const ENDPOINT_GAP = NODE_R + 0.8; // stop strokes short of the node ring
 const BOW_STEP = 13; // perpendicular control-point offset between parallels
 const REVERSAL_MS = 300; // arrow reversal animation duration
+const CHARGE_BADGE_R = 3.1;
+const CHARGE_BADGE_OFFSET = 5.2;
 
 // Respect the OS "reduce motion" setting for the JS rAF tweens below (CSS
 // animations are neutralised by the @media block in styles.css).
@@ -91,6 +93,12 @@ function qTangent(c, t) {
     2 * (1 - t) * (c.cx - c.ax) + 2 * t * (c.bx - c.cx),
     2 * (1 - t) * (c.cy - c.ay) + 2 * t * (c.by - c.cy)
   );
+}
+
+function chargeBadgePoint(c) {
+  const [x, y] = qPoint(c, 0.5);
+  const [tx, ty] = qTangent(c, 0.5);
+  return { x: x - ty * CHARGE_BADGE_OFFSET, y: y + tx * CHARGE_BADGE_OFFSET };
 }
 
 function trimmedEnds(c) {
@@ -161,6 +169,42 @@ function headEnd(ends, edge) {
   return ends.to === edge.v ? "B" : "A";
 }
 
+function isBattleConfig(config) {
+  return config.owner instanceof Map && config.charges instanceof Map;
+}
+
+function setBattleFrame(svgEl, config) {
+  const battle = isBattleConfig(config);
+  svgEl.classList.toggle("is-battle", battle);
+  if (battle) svgEl.dataset.turn = config.turn;
+  else delete svgEl.dataset.turn;
+}
+
+function battleOwner(config, edgeId) {
+  return config.owner.get(edgeId) ?? "neutral";
+}
+
+function battleCharges(config, edgeId) {
+  return config.charges.get(edgeId) ?? 0;
+}
+
+function applyBattleEdgeState(config, edgeViews) {
+  if (!isBattleConfig(config)) return;
+  for (const [edgeId, view] of edgeViews) {
+    const owner = battleOwner(config, edgeId);
+    const charges = battleCharges(config, edgeId);
+    view.group.dataset.owner = owner;
+    view.group.dataset.charge = String(charges);
+    view.group.classList.toggle("is-owner-white", owner === "white");
+    view.group.classList.toggle("is-owner-black", owner === "black");
+    view.group.classList.toggle("is-owner-neutral", owner === "neutral");
+    view.group.classList.toggle("is-current-owner", owner !== "neutral" && owner === config.turn);
+    view.group.classList.toggle("is-opponent", owner !== "neutral" && owner !== config.turn);
+    view.group.classList.toggle("is-spent", charges === 0);
+    if (view.chargeText) view.chargeText.textContent = String(charges);
+  }
+}
+
 export function createBoard(svgEl, config, { onEdgeTap } = {}) {
   const nodeById = new Map(config.level.nodes.map((n) => [n.id, n]));
   let current = config;
@@ -168,6 +212,7 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
   svgEl.classList.add("board");
   svgEl.classList.remove("is-won"); // reset win state; this <svg> is reused per lock
   svgEl.classList.remove("is-strike"); // and clear a strike flash that never finished (e.g. tab backgrounded mid-animation)
+  setBattleFrame(svgEl, config);
   svgEl.setAttribute("viewBox", computeViewBox(config.level));
   svgEl.setAttribute("preserveAspectRatio", "xMidYMid meet");
   while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
@@ -190,7 +235,8 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
       class:
         "edge-group " +
         (edge.w === 2 ? "is-thick" : "is-thin") +
-        (config.level.target === edge.id ? " is-target" : ""),
+        (config.level.target === edge.id ? " is-target" : "") +
+        (config.level.targetB === edge.id ? " is-target-b" : ""),
     });
     group.dataset.edge = edge.id;
 
@@ -210,10 +256,21 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
     }
     group.appendChild(line);
     group.appendChild(arrow);
+    let chargeText = null;
+    if (isBattleConfig(config)) {
+      const p = chargeBadgePoint(curve);
+      const charge = el("g", { class: "edge-charge", transform: `translate(${p.x} ${p.y})` });
+      const chargeBg = el("circle", { class: "edge-charge-bg", r: CHARGE_BADGE_R });
+      chargeText = el("text", { class: "edge-charge-text", y: "0.45" });
+      chargeText.textContent = String(battleCharges(config, edge.id));
+      charge.appendChild(chargeBg);
+      charge.appendChild(chargeText);
+      group.appendChild(charge);
+    }
     group.appendChild(hit);
     edgeLayer.appendChild(group);
 
-    edgeViews.set(edge.id, { group, line, hit, arrow, curve, edge, dim });
+    edgeViews.set(edge.id, { group, line, hit, arrow, chargeText, curve, edge, dim });
     bindTap(hit, () => onEdgeTap && onEdgeTap(edge.id));
   }
 
@@ -231,6 +288,7 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
   }
 
   applyNodeState(current, nodeViews);
+  applyBattleEdgeState(current, edgeViews);
 
   // --- Tap binding (touch + click, de-duplicated) ----------------------------
   function bindTap(target, handler) {
@@ -255,6 +313,7 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
   // --- Public view API -------------------------------------------------------
 
   function update(nextConfig) {
+    setBattleFrame(svgEl, nextConfig);
     for (const edge of nextConfig.level.edges) {
       const view = edgeViews.get(edge.id);
       const prevEnds = edgeEnds(current, edge.id);
@@ -266,6 +325,7 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
     }
     current = nextConfig;
     applyNodeState(current, nodeViews);
+    applyBattleEdgeState(current, edgeViews);
   }
 
   function animateReversal(view, prevEnds, nextEnds) {
