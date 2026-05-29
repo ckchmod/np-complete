@@ -291,6 +291,10 @@ function genericHead(ctx, type, len, rng) {
       chain(ctx, C, Math.min(len, 4));        // bounded chain per branch (see attachCharger OR)
     }
   } else { // "and": split len across two forcing legs (BOTH required)
+    // At len<=2 this draw is fixed (a=1, legs [1,1]) but is kept UNCONDITIONAL on
+    // purpose: it advances the shared rng stream, so it's load-bearing for seed
+    // determinism — guarding it away would shift every later board for a seed and
+    // break the determinism test.
     const a = 1 + Math.floor(rng() * Math.max(1, len - 1));
     for (const l of [a, Math.max(1, len - a)]) {
       const C = ctx.node(); ctx.E(R, C, 1);        // thin AND input

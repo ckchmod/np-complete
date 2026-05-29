@@ -42,6 +42,12 @@ function clearHandoff() {
   if (handoffTimer) { clearTimeout(handoffTimer); handoffTimer = null; }
 }
 
+// True while any full-screen modal overlay is open — used to stop a second
+// overlay (or an auto-advance) from appearing on top of an open one.
+function anyOverlayOpen() {
+  return [introEl, rushIntro, rushOver].some((el) => el && !el.classList.contains("hidden"));
+}
+
 // ── Tutorials ─────────────────────────────────────────────────────────────────
 function goTo(index) {
   if (index < 0 || index >= TUTORIALS.length) return;
@@ -64,6 +70,7 @@ function loadTutorial(level) {
     onWin() {
       handoffTimer = setTimeout(() => {
         handoffTimer = null;
+        if (anyOverlayOpen()) return; // player opened a modal (e.g. "?") during the win — don't auto-advance behind it
         if (currentIndex < TUTORIALS.length - 1) goTo(currentIndex + 1);
         else showRushRules(true); // last tutorial cleared → Rush rules, then Rush
       }, 1400);
@@ -140,6 +147,11 @@ if (navNext) navNext.addEventListener("click", () => {
 });
 if (navSkip) navSkip.addEventListener("click", () => showRushRules(true));
 
+// Reset / "Play again" cancels a pending auto-advance so a deliberate replay
+// isn't yanked to the next level by the post-win handoff timer.
+const btnReset = document.getElementById("btn-reset");
+if (btnReset) btnReset.addEventListener("click", clearHandoff);
+
 const btnRushAgain = document.getElementById("btn-rush-again");
 const btnRushShare = document.getElementById("btn-rush-share");
 if (btnRushAgain) btnRushAgain.addEventListener("click", enterRush);
@@ -166,6 +178,7 @@ if (btnSkipTutorial) btnSkipTutorial.addEventListener("click", () => {
 // Help is context-aware: the Rush rules during a run, the how-to-play intro
 // during the tutorials.
 if (btnHelp) btnHelp.addEventListener("click", () => {
+  if (anyOverlayOpen()) return; // an overlay is already up — don't stack a second one
   if (mountEl.classList.contains("mode-rush")) showRushRules(false);
   else showIntro();
 });

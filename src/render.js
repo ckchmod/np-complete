@@ -167,6 +167,7 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
 
   svgEl.classList.add("board");
   svgEl.classList.remove("is-won"); // reset win state; this <svg> is reused per lock
+  svgEl.classList.remove("is-strike"); // and clear a strike flash that never finished (e.g. tab backgrounded mid-animation)
   svgEl.setAttribute("viewBox", computeViewBox(config.level));
   svgEl.setAttribute("preserveAspectRatio", "xMidYMid meet");
   while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
@@ -307,6 +308,7 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
   }
 
   function shakeEdge(edgeId) {
+    if (prefersReducedMotion()) return; // no animation => animationend never fires => class + listener would leak
     const view = edgeViews.get(edgeId);
     if (!view) return;
     restartClass(view.group, "is-shaking");
@@ -318,6 +320,7 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
   }
 
   function pulseClass(nodeId, cls) {
+    if (prefersReducedMotion()) return; // see shakeEdge: suppressed animation would strand the class + leak the listener
     const view = nodeViews.get(nodeId);
     if (!view) return;
     restartClass(view.group, cls);
@@ -347,8 +350,17 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
   // Brief red flash + shake on the whole board when a life is lost — the most
   // consequential event should be the most felt (previously it had no board cue).
   function strikeFlash() {
+    if (prefersReducedMotion()) return; // suppressed animation would strand .is-strike + leak the listener
     restartClass(svgEl, "is-strike");
-    svgEl.addEventListener("animationend", () => svgEl.classList.remove("is-strike"), { once: true });
+    // animationend BUBBLES: a node/edge child's own animation must not strip
+    // .is-strike early, so match e.target and unbind by hand (not {once}, which a
+    // bubbled child event would consume).
+    const onEnd = (e) => {
+      if (e.target !== svgEl) return;
+      svgEl.classList.remove("is-strike");
+      svgEl.removeEventListener("animationend", onEnd);
+    };
+    svgEl.addEventListener("animationend", onEnd);
   }
 
   // Drop the win styling (target back to red, ghost back) without rebuilding —

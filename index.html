@@ -23,8 +23,9 @@
         <span id="par-display" class="hud-label">optimal —</span>
       </div>
 
-      <!-- Rush HUD -->
-      <div id="rush-hud" class="rush-only" aria-live="polite">
+      <!-- Rush HUD. No aria-live: these counters rewrite on every tap, which would
+           flood a screen reader. Transient status (e.g. skip cost) uses #rush-toast. -->
+      <div id="rush-hud" class="rush-only">
         <span id="rush-score" class="hud-value">0</span><span class="hud-label"> solved</span>
         <span class="hud-sep">·</span>
         <span id="rush-moves" class="hud-value">0 / 0</span><span class="hud-label"> moves</span>
