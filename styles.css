@@ -25,7 +25,26 @@
   --font-mono:   'DM Mono', 'Courier New', monospace;
   --font-label:  'Space Mono', monospace;
   --radius:      4px;
+  --radius-lg:   12px;
   --transition:  0.18s ease;
+  --space-1:     4px;
+  --space-2:     8px;
+  --space-3:     12px;
+  --space-4:     16px;
+  --space-5:     20px;
+  --space-6:     24px;
+  --space-7:     28px;
+  --space-8:     32px;
+  --panel-border: 1px solid var(--c-dim);
+  --text-2xs:    10px;
+  --text-xs:     11px;
+  --text-sm:     12px;
+  --text-md:     13px;
+  --text-lg:     14px;
+  --text-xl:     18px;
+  --mode-card-max: 380px;
+  --mode-choice-min: 118px;
+  --status-min: 22px;
 }
 
 html, body {
@@ -114,6 +133,14 @@ html, body {
   min-height: 0;
 }
 
+#battle-wrap {
+  flex: 1 1 0;
+  min-height: 0;
+  padding: var(--space-2) var(--space-3) var(--space-3);
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
 .board {
   width: 100%;
   height: 100%;
@@ -121,6 +148,70 @@ html, body {
   overflow: visible;
   touch-action: none;
 }
+
+.battle-board {
+  flex: 1 1 0;
+  min-height: 0;
+  border: var(--panel-border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  padding: var(--space-2);
+}
+
+.battle-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: var(--panel-border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  padding: var(--space-2) var(--space-3);
+  flex-shrink: 0;
+}
+
+.battle-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--c-grey);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.battle-turn {
+  font-family: var(--font-label);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--c-legal);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.battle-status {
+  min-height: var(--status-min);
+  color: var(--c-slack);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.battle-result {
+  border: var(--panel-border);
+  border-color: var(--c-legal);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  color: var(--c-white);
+  font-family: var(--font-label);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  padding: var(--space-3) var(--space-4);
+  text-align: center;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.battle-result.hidden { display: none; }
 
 /* ── Edge styles ──────────────────────────────────────────────────────────── */
 
@@ -445,7 +536,8 @@ html, body {
 .btn-help:hover { color: var(--c-white); border-color: var(--c-grey); }
 
 /* ── Mode chrome: tutorial vs rush ────────────────────────────────────────── */
-.rush-only { display: none; }
+.rush-only,
+.battle-only { display: none; }
 .mode-rush .tutorial-only { display: none; }
 /* #hud/#controls/#nav-bar set `display` via an ID selector, which out-specifies
    the class rule above — so hide them explicitly in rush (ID+class beats ID). */
@@ -457,6 +549,71 @@ html, body {
 #rush-hud { align-items: baseline; gap: 6px; }
 #rush-strikes.strikes { color: var(--c-target); letter-spacing: 0.18em; }
 #rush-controls { justify-content: center; }
+
+.mode-battle .tutorial-only { display: none; }
+.mode-battle #hud,
+.mode-battle #controls,
+.mode-battle #nav-bar,
+.mode-battle #rush-hud,
+.mode-battle #rush-controls,
+.mode-battle #rush-toast,
+.mode-battle #board-wrap { display: none; }
+.mode-battle #battle-wrap { display: flex; }
+
+.mode-card {
+  max-width: var(--mode-card-max);
+  padding: var(--space-6) var(--space-5);
+}
+
+.mode-grid {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.mode-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  min-height: var(--mode-choice-min);
+  padding: var(--space-4);
+  text-align: left;
+  white-space: normal;
+}
+
+.mode-choice.btn-secondary {
+  border-color: var(--c-legal);
+}
+
+.mode-kicker {
+  color: var(--c-slack);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.mode-title {
+  color: inherit;
+  font-family: var(--font-label);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.mode-copy {
+  color: inherit;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.4;
+  opacity: 0.82;
+  text-transform: none;
+}
 
 /* ── Rush feedback & juice ─────────────────────────────────────────────────── */
 /* Lost a life: red flash + shake on the whole board (render.js adds .is-strike). */

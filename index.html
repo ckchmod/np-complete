@@ -41,6 +41,16 @@
       <svg id="board" class="board" aria-label="puzzle board"></svg>
     </main>
 
+    <main id="battle-wrap" class="battle-only" aria-label="battle mode board">
+      <div class="battle-panel" aria-label="Current player">
+        <span class="battle-label">Turn</span>
+        <span id="battle-turn" class="battle-turn">White</span>
+      </div>
+      <svg id="battle-board" class="board battle-board" aria-label="battle puzzle board"></svg>
+      <p id="battle-status" class="battle-status" aria-live="polite"></p>
+      <div id="battle-result" class="battle-result hidden" role="status" aria-live="polite"></div>
+    </main>
+
     <!-- Hint (tutorials) / persistent objective (rush) -->
     <p id="level-hint" class="level-hint"></p>
 
@@ -112,6 +122,25 @@
         <p class="intro-foot">Three lives gone ends the run. How far can you get?</p>
         <div class="result-actions">
           <button id="btn-rush-start" class="btn btn-primary">Start picking</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="mode-select" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Choose game mode">
+      <div class="overlay-card mode-card">
+        <div class="intro-logo">CHOOSE MODE</div>
+        <p class="intro-goal">One lock, two ways in.</p>
+        <div class="mode-grid" aria-label="Available modes">
+          <button id="rush-mode-button" class="btn btn-primary mode-choice" type="button">
+            <span class="mode-kicker">Solo</span>
+            <span class="mode-title">Rush</span>
+            <span class="mode-copy">Pick generated locks before three strikes run out.</span>
+          </button>
+          <button id="battle-mode-button" class="btn btn-secondary mode-choice" type="button">
+            <span class="mode-kicker">Versus</span>
+            <span class="mode-title">Battle</span>
+            <span class="mode-copy">Take turns spending charges and racing the rival target.</span>
+          </button>
         </div>
       </div>
     </div>

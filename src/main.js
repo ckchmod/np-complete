@@ -1,8 +1,9 @@
-// THE LOCK — bootstrap. Intro -> tutorials -> Rush (Survival).
+// THE LOCK — bootstrap. Intro -> tutorials -> mode selection -> Rush/Battle.
 
 import { TUTORIALS } from "./levels.js";
 import { createGame } from "./game.js";
 import { createRush } from "./rush.js";
+import { createBattle } from "./battle.js";
 
 const STORAGE_TUT_DONE = "the-lock:tutorials-done";
 function markTutorialsDone() {
@@ -24,10 +25,18 @@ const btnHelp  = document.getElementById("btn-help");
 const rushOver = document.getElementById("rush-over");
 const rushIntro = document.getElementById("rush-intro");
 const btnRushStart = document.getElementById("btn-rush-start");
+const modeSelect = document.getElementById("mode-select");
+const btnRushMode = document.getElementById("rush-mode-button");
+const btnBattleMode = document.getElementById("battle-mode-button");
+const battleBoard = document.getElementById("battle-board");
+const battleTurn = document.getElementById("battle-turn");
+const battleStatus = document.getElementById("battle-status");
+const battleResult = document.getElementById("battle-result");
 
 let currentIndex = 0;
 let currentGame = null;
 let rush = null;
+let battle = null;
 let lastShare = "";
 let handoffTimer = null; // the 1400ms post-win handoff timer (cleared on any navigation)
 
@@ -45,7 +54,7 @@ function clearHandoff() {
 // True while any full-screen modal overlay is open — used to stop a second
 // overlay (or an auto-advance) from appearing on top of an open one.
 function anyOverlayOpen() {
-  return [introEl, rushIntro, rushOver].some((el) => el && !el.classList.contains("hidden"));
+  return [introEl, rushIntro, rushOver, modeSelect].some((el) => el && !el.classList.contains("hidden"));
 }
 
 // ── Tutorials ─────────────────────────────────────────────────────────────────
@@ -57,7 +66,8 @@ function goTo(index) {
 
 function loadTutorial(level) {
   clearHandoff();
-  mountEl.classList.remove("mode-rush");
+  mountEl.classList.remove("mode-rush", "mode-battle");
+  hideModeSelect();
   if (titleEl) titleEl.textContent = level.name;
   if (hintEl) hintEl.textContent = level.hint || "";
   if (navPrev) navPrev.disabled = currentIndex === 0;
@@ -72,20 +82,83 @@ function loadTutorial(level) {
         handoffTimer = null;
         if (anyOverlayOpen()) return; // player opened a modal (e.g. "?") during the win — don't auto-advance behind it
         if (currentIndex < TUTORIALS.length - 1) goTo(currentIndex + 1);
-        else showRushRules(true); // last tutorial cleared → Rush rules, then Rush
+        else showModeSelect(); // last tutorial cleared → player chooses Rush or Battle
       }, 1400);
     },
   });
+}
+
+
+// ── Mode selection ─────────────────────────────────────────────────────────────
+function hideModeSelect() {
+  if (modeSelect) modeSelect.classList.add("hidden");
+}
+
+function destroyRush() {
+  if (rush) { rush.destroy(); rush = null; }
+}
+
+function destroyBattle() {
+  if (battle) { battle.destroy(); battle = null; }
+}
+
+function showModeSelect() {
+  clearHandoff();
+  hideResultCard();
+  if (currentGame) { currentGame.destroy(); currentGame = null; }
+  destroyRush();
+  destroyBattle();
+  if (rushIntro) rushIntro.classList.add("hidden");
+  if (rushOver) { rushOver.classList.remove("visible"); rushOver.classList.add("hidden"); }
+  if (battleResult) { battleResult.textContent = ""; battleResult.classList.add("hidden"); }
+  mountEl.classList.remove("mode-rush", "mode-battle");
+  if (titleEl) titleEl.textContent = "CHOOSE MODE";
+  if (hintEl) hintEl.textContent = "Pick a way through the lock.";
+  if (modeSelect) modeSelect.classList.remove("hidden");
+  else showRushRules(true);
+}
+
+function enterBattle() {
+  clearHandoff();
+  if (currentGame) { currentGame.destroy(); currentGame = null; }
+  destroyRush();
+  destroyBattle();
+  markTutorialsDone();
+  hideResultCard();
+  hideModeSelect();
+  if (rushIntro) rushIntro.classList.add("hidden");
+  if (rushOver) { rushOver.classList.remove("visible"); rushOver.classList.add("hidden"); }
+  if (battleResult) { battleResult.textContent = ""; battleResult.classList.add("hidden"); }
+  mountEl.classList.remove("mode-rush");
+  mountEl.classList.add("mode-battle");
+  if (titleEl) titleEl.textContent = "BATTLE";
+  if (hintEl) hintEl.textContent = "White moves first. Reverse your target before you run out of legal moves.";
+  const seed = (Math.floor(Math.random() * 0x7fffffff)) >>> 0;
+  battle = createBattle({
+    mountEl,
+    refs: { boardEl: battleBoard, turnEl: battleTurn, statusEl: battleStatus },
+    seed,
+    onTerminal({ message }) {
+      if (battleResult) {
+        battleResult.textContent = message;
+        battleResult.classList.remove("hidden");
+      }
+    },
+  });
+  battle.start();
 }
 
 // ── Rush ──────────────────────────────────────────────────────────────────────
 function enterRush() {
   clearHandoff();
   if (currentGame) { currentGame.destroy(); currentGame = null; }
-  if (rush) { rush.destroy(); rush = null; }
+  destroyRush();
+  destroyBattle();
   markTutorialsDone();
   hideResultCard();
   if (rushOver) { rushOver.classList.remove("visible"); rushOver.classList.add("hidden"); }
+  hideModeSelect();
+  mountEl.classList.remove("mode-battle");
   mountEl.classList.add("mode-rush");
   if (titleEl) titleEl.textContent = "RUSH";
   if (hintEl) hintEl.innerHTML = 'Reverse the <span class="intro-red">red</span> arrow · every node needs <b>2</b> pointing in';
@@ -143,9 +216,9 @@ if (btnRushStart) btnRushStart.addEventListener("click", () => {
 if (navPrev) navPrev.addEventListener("click", () => goTo(currentIndex - 1));
 if (navNext) navNext.addEventListener("click", () => {
   if (currentIndex < TUTORIALS.length - 1) goTo(currentIndex + 1);
-  else showRushRules(true);
+  else showModeSelect();
 });
-if (navSkip) navSkip.addEventListener("click", () => showRushRules(true));
+if (navSkip) navSkip.addEventListener("click", showModeSelect);
 
 // Reset / "Play again" cancels a pending auto-advance so a deliberate replay
 // isn't yanked to the next level by the post-win handoff timer.
@@ -155,6 +228,8 @@ if (btnReset) btnReset.addEventListener("click", clearHandoff);
 const btnRushAgain = document.getElementById("btn-rush-again");
 const btnRushShare = document.getElementById("btn-rush-share");
 if (btnRushAgain) btnRushAgain.addEventListener("click", enterRush);
+if (btnRushMode) btnRushMode.addEventListener("click", enterRush);
+if (btnBattleMode) btnBattleMode.addEventListener("click", enterBattle);
 if (btnRushShare) btnRushShare.addEventListener("click", () => {
   if (navigator.clipboard && lastShare) navigator.clipboard.writeText(lastShare).catch(() => {});
   const o = btnRushShare.textContent;
@@ -173,7 +248,7 @@ if (btnStart) btnStart.addEventListener("click", () => {
 if (btnSkipTutorial) btnSkipTutorial.addEventListener("click", () => {
   try { localStorage.setItem(STORAGE_INTRO_SEEN, "1"); } catch (_) {}
   hideIntro();
-  showRushRules(true); // skip the tutorials, but still show the Rush rules first
+  showModeSelect(); // skip the tutorials, but still choose a mode first
 });
 // Help is context-aware: the Rush rules during a run, the how-to-play intro
 // during the tutorials.
