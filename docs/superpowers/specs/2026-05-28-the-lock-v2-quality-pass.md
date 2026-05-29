@@ -1,8 +1,26 @@
 # THE LOCK — v2 "Professional Quality" Pass — Design Spec
 
-Date: 2026-05-28
-Status: design approved (Full pro pass + Full gadget palette), pending spec review → implementation plan
+Date: 2026-05-28 (status updated 2026-05-29)
+Status: IMPLEMENTED through A, B, C1, D, E, F, G + review fixes — see Implementation Status below.
 Extends `2026-05-28-the-lock-design.md`.
+
+## Implementation status (2026-05-29)
+
+Shipped + pushed to `main` (8 milestones, 47/47 tests, working tree clean & in sync):
+- **A** gadget-palette generator — single/AND/OR/shuttle heads; one-of-a-kind rotation via `avoidHead`; slow ramp `len = 1 + floor(d/2)`; shuttle forces backtracking; build→verify→reject — `e6823d8`; OR-recursion + cap-blowup review fix (OR branches are bounded chains) — `90500fa`.
+- **G** board legibility — dashed ring goal-marker, red-only target (no cyan halo), staple tut-1 — `fa03529`.
+- **C1** skip-tutorial button on the intro card — `69e012d`.
+- **B** feedback & juice — cyan-pulse split fix (`.is-win-pulsing`), strike flash/shake/vibrate, visible `Skip (−1 ✕)` + toast, amber low-budget, cascade clamp + `SOLVE_DELAY` 900 — `c5eb3d0`.
+- **D** mobile & a11y — zoom re-enabled, safe-area insets, edge-hit 6→12, `prefers-reduced-motion` (CSS + JS), contrast, aria — `7fbf46a`.
+- **F** robustness — cascade/win timer teardown via `board.destroy()` + game `destroyed` guard. F2 skipped: the review proved the proposed solver state-cap a no-op (BFS visits ~7.5k states) — `5603d6a`.
+- **E** visual polish — stronger legal glow, slow red target-breathe, overlay fade + card-rise, run-over score count-up, richer end screen (total moves, vs-best delta) — `6495930`.
+
+NOT YET BUILT (onboarding tail):
+- **C2** Rush-rules interstitial at the tutorial→Rush handoff (§4).
+- **C3** context-aware "?" help in Rush (§4).
+- **Shuttle tutorial** (audit finding 7): Rush introduces the lend/reclaim backtracking gadget at d≥8 untaught — add a 6th tutorial to `src/levels.js` (verify par + backtracking via the solver; `test/levels.test.js` asserts par), or delay/limit shuttle in Rush.
+
+LAUNCH GATE (user-triggered, unchanged): user runs `/code-review ultra` → address findings → make the repo **public** + enable **GitHub Pages**. The two open directions at the 2026-05-29 checkpoint were: (A) finish the onboarding tail first, or (B) launch now and finish onboarding after.
 
 ## 0. Goal & sequencing
 
