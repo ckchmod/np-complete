@@ -33,7 +33,7 @@ np-complete/
 | PWA / offline | `manifest.json`, `sw.js`, `src/main.js` | Static installable shell, offline cache, and service worker update notice. |
 | SVG board contract | `src/render.js`, `styles.css` | CSS classes/data attrs are coupled to renderer output. |
 | Tutorial session state | `src/game.js` | Move history, undo/reset, localStorage resume, scoring/share. |
-| Tests | `test/*.test.js` | 193 current node:test cases at this milestone; avoid hard-coding counts in README. |
+| Tests | `test/*.test.js` | 196 current node:test cases at this milestone; avoid hard-coding counts in README. |
 | Product/spec intent | `docs/superpowers/specs/*.md` | Use for domain decisions before changing mechanics. |
 
 ## CODE MAP
@@ -81,7 +81,7 @@ np-complete/
 - Rush boards are generated live, seeded with `makeRng`, capped for phone legibility, and solver-verified before display.
 - The mode hub exposes Tutorial, Puzzle Rush, Battle Hot-seat, and Battle vs AI after the intro.
 - Help is context-aware: tutorial intro outside active modes, Rush rules inside Rush, Battle rules inside Battle.
-- Current source has 6 tutorials and tests have 193 cases at this milestone; older prose may still say 5 tutorials / 44, 117, 182, 185, 186, 190, or 192 tests.
+- Current source has 6 tutorials and tests have 196 cases at this milestone; older prose may still say 5 tutorials / 44, 117, 182, 185, 186, 190, 192, or 193 tests.
 
 ## WORKFLOW
 - After every significant milestone, update relevant docs and push the branch once verification passes.
@@ -97,6 +97,6 @@ npm run gates      # JSON solver gates for THE LOCK, THE_LOCK_V2, tutorials
 ```
 
 ## NOTES
-- Baseline on 2026-05-30 after the end-to-end quality review: `npm test` passes 193/193; `npm run gates` reports THE_LOCK optimal 16, reachableCount 92, THE_LOCK_V2 optimal 40, reachableCount 24544, and backtracking required.
+- Baseline on 2026-05-30 after the UI/Battle consistency pass: `npm test` passes 196/196; `npm run gates` reports THE_LOCK optimal 16, reachableCount 92, THE_LOCK_V2 optimal 40, reachableCount 24544, and backtracking required.
 - `.nojekyll` is present for GitHub Pages static hosting.
 - Root `CLAUDE.md` already mandates simple, surgical, goal-verified changes; keep AGENTS guidance project-specific.
