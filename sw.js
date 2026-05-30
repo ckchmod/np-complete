@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-lock-v3";
+const CACHE_NAME = "the-lock-v4";
 const urlsToCache = [
   "/",
   "/index.html",

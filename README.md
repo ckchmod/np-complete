@@ -54,6 +54,7 @@ Each Rush lock is generated live in the browser and verified by the solver befor
 - The red target points into a root node that can only be reversed once it gains enough inflow.
 - Earlier boards use relay and AND/OR patterns to teach the core logic, then introduce a compact cycle head so the progression does not stay purely tree-shaped.
 - Higher tiers can draw from richer gadget families such as latch, battery, mutex, cycle-pump, shared-reservoir, and shuttle-style patterns.
+- The layout pass keeps edge endpoints and all node pairs separated enough for phone-size SVG arrows, so generated knots do not collapse into jammed motifs.
 - Difficulty metrics report things like reachable states, diameter, branching, par, and other search properties. The generator uses solver checks so each accepted board is solvable and has a true shortest solution length.
 
 Battle boards are generated from the same NCL base, then checked as finite charged two-player games before play starts. The generator enforces outcome balance internally, but the UI doesn't expose solution routes or strategy tables.
@@ -72,7 +73,7 @@ Then open <http://localhost:8000>.
 
 ### GitHub Pages
 
-The repository includes a Pages workflow at `.github/workflows/pages.yml`. Pushes to `main` upload the static repo root and deploy it with GitHub Pages, so the published view updates from `main` without a build step.
+The repository includes a Pages workflow at `.github/workflows/pages.yml`. Pushes to `main` upload the static repo root and deploy it with GitHub Pages, so the published view updates from `main` without a build step. If an installed or previously opened copy still shows old assets, refresh once after the service worker updates; the current cache is `the-lock-v4`.
 
 ### Test on your phone (same Wi-Fi)
 
@@ -109,9 +110,9 @@ npm run gates      # prints the solver gates (THE LOCK, THE_LOCK_V2, tutorials) 
 | `src/solver.js` | BFS solver for exhaustive gates, goal-directed solving, and non-triviality reports |
 | `src/difficultyMetrics.js` | Reachability, par, diameter, branching, path, slack, and contention metrics |
 | `src/gadgetBuilders.js` | Standalone gadget fixtures and metadata for richer generated lock families |
-| `src/generator.js` | Live Rush generator with solver verification, gadget-family sampling, and diagnostics hooks |
+| `src/generator.js` | Live Rush generator with solver verification, gadget-family sampling, phone-readable spacing, and diagnostics hooks |
 | `src/levels.js` | 6 tutorials plus authored **THE LOCK** and **THE_LOCK_V2** boards outside Rush |
-| `src/render.js` | SVG board: curved edges, weight-scaled arrowheads, slack glow, red targets, ghost markers, flip animation, and Battle badges |
+| `src/render.js` | SVG board: curved/adaptively bowed edges, weight-scaled arrowheads, slack glow, red targets, ghost markers, flip animation, and Battle badges |
 | `src/game.js` | Tutorial controller: moves, undo/reset, par/stars/score, localStorage, share + path hash |
 | `src/rush.js` | Puzzle Rush: endless generated locks, move budget, 3 strikes, difficulty ramp |
 | `src/battleEngine.js` | Battle rules: turns, ownership, charges, legal flips, target wins, and no-legal-move losses |
