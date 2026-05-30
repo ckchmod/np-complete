@@ -169,6 +169,35 @@ function shortestPathAnalysis(traversal) {
   };
 }
 
+export function cycleRank(level) {
+  const neighborsByNode = new Map(level.nodes.map((node) => [node.id, []]));
+  for (const edge of level.edges) {
+    neighborsByNode.get(edge.u).push(edge.v);
+    neighborsByNode.get(edge.v).push(edge.u);
+  }
+
+  const visited = new Set();
+  let connectedComponents = 0;
+
+  for (const node of level.nodes) {
+    if (visited.has(node.id)) continue;
+    connectedComponents++;
+    const stack = [node.id];
+    visited.add(node.id);
+
+    while (stack.length > 0) {
+      const current = stack.pop();
+      for (const neighbor of neighborsByNode.get(current)) {
+        if (visited.has(neighbor)) continue;
+        visited.add(neighbor);
+        stack.push(neighbor);
+      }
+    }
+  }
+
+  return level.edges.length - level.nodes.length + connectedComponents;
+}
+
 export function targetSlack(config, targetEdge = config.level.target) {
   const edge = typeof targetEdge === "string"
     ? config.edgeById.get(targetEdge)
@@ -286,5 +315,6 @@ export function allMetrics(level, { cap = STATE_CAP } = {}) {
   return {
     ...coreMetrics(traversal, analysis),
     ...computeAdvancedMetrics(traversal, analysis),
+    cycleRank: cycleRank(level),
   };
 }

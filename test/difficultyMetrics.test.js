@@ -3,10 +3,18 @@ import assert from "node:assert/strict";
 
 import { THE_LOCK, TUTORIALS } from "../src/levels.js";
 import { makeConfig } from "../src/engine.js";
-import { allMetrics, basicMetrics, isNonmonotonic, targetSlack } from "../src/difficultyMetrics.js";
+import { allMetrics, basicMetrics, cycleRank, isNonmonotonic, targetSlack } from "../src/difficultyMetrics.js";
 
 const SIMPLE_CHAIN = TUTORIALS[2];
 const SHUTTLE = TUTORIALS[5];
+const TREE_TOPOLOGY = {
+  nodes: [{ id: "a" }, { id: "b" }, { id: "c" }, { id: "d" }],
+  edges: [
+    { id: "ab", u: "a", v: "b" },
+    { id: "bc", u: "b", v: "c" },
+    { id: "bd", u: "b", v: "d" },
+  ],
+};
 
 test("basicMetrics returns the expected core metrics for THE_LOCK", () => {
   const metrics = basicMetrics(THE_LOCK);
@@ -53,6 +61,7 @@ test("allMetrics preserves core THE_LOCK metrics and reports advanced difficulty
   assert.equal(metrics.mandatoryRepeatedFlips, true);
   assert.equal(metrics.resourceContention, 1);
   assert.equal(metrics.nonmonotonicity, true);
+  assert.ok(metrics.cycleRank > 0);
 });
 
 test("shuttle tutorial has mandatory repeated flips and nonmonotonic target slack", () => {
@@ -72,6 +81,18 @@ test("simple slack chain has no mandatory repeat or nonmonotonic move", () => {
   assert.equal(metrics.mandatoryRepeatedFlips, false);
   assert.equal(metrics.nonmonotonicity, false);
   assert.equal(metrics.resourceContention, 0);
+});
+
+test("cycleRank distinguishes tree-like and cyclic board topology", () => {
+  assert.equal(cycleRank(TREE_TOPOLOGY), 0);
+  assert.ok(cycleRank(THE_LOCK) > 0);
+});
+
+test("allMetrics includes cycleRank without changing basicMetrics", () => {
+  const metrics = allMetrics(THE_LOCK);
+
+  assert.equal(metrics.cycleRank, cycleRank(THE_LOCK));
+  assert.equal(Object.hasOwn(basicMetrics(THE_LOCK), "cycleRank"), false);
 });
 
 test("targetSlack reads slack at the target edge receiver", () => {
