@@ -1,8 +1,9 @@
 // THE LOCK — live procedural lock generation. Browser-safe (pure logic).
 //
-// Difficulty is CONSTRUCTED as a branching RELAY TREE (acyclic, so a
-// force-directed layout SPREADS it — no ring). The red target points into the
-// root R; R can only be reversed once it gains +2 inflow, which it gets from its
+// Difficulty is CONSTRUCTED from branching relays plus selected cyclic heads, so
+// early boards stay readable without keeping the whole progression tree-shaped.
+// The red target points into the root R; R can only be reversed once it gains +2
+// inflow, which it gets from its
 // sub-relays. An AND junction — two THIN (w=1) children that must BOTH be flipped
 // inward (+1 +1 = +2) — forces resolving MULTIPLE branches rather than unwinding
 // one line. Each leg is a w2 relay chain ending in a local "battery" (a rigid
@@ -36,10 +37,11 @@ export function makeRng(seed) {
 const round1 = (x) => Math.round(x * 10) / 10;
 
 // ── Layout ────────────────────────────────────────────────────────────────
-// Force-directed, multi-start, readability-scored. The graph is a tree (+ tiny
-// rigid 2-cycles), so a plain random-seeded relaxation spreads it; we run several
-// and keep the most legible (fewest crossings / grazes / cramped pairs / sharp
-// angles). Layout dominates generation (tens of ms), well under the between-lock delay.
+// Force-directed, multi-start, readability-scored. Most heads are still sparse,
+// with occasional true cycles, so random-seeded relaxation spreads them cleanly;
+// we run several and keep the most legible (fewest crossings / grazes / cramped
+// pairs / sharp angles). Layout dominates generation (tens of ms), well under
+// the between-lock delay.
 const W = 72, H = 116; // interior layout box
 const FIT = { X0: 14, X1: 86, Y0: 22, Y1: 144 };
 
@@ -217,8 +219,9 @@ function forceLayout(ids, edges, rng) {
 //   chain   — a w2 relay (the connective tissue / simplest leg)
 //   AND     — two thin children, BOTH must flip in (+1 +1 = +2): forcing
 //   OR      — several thick branches, ANY one delivers +2: choice / multi-path
+//   cycle   — a compact triangle head: the first genuine non-tree topology
 //   shuttle — the lend/reclaim head (lifted from THE_LOCK): forces BACKTRACKING
-//   latch/battery/mutex/cyclePump/sharedReservoir — compact mappings of the
+//   latch/battery/mutex/cyclePump/sharedReservoir — richer compact mappings of the
 //              standalone gadget-builder families, unlocked only after tier 5
 // Forcing AND is always binary here (a node needs <= +2; an AND-of-3 would be
 // 2-of-3, i.e. one skippable). Each gadget keeps every node at inflow >= 2 by
@@ -354,13 +357,25 @@ function mutexHead(ctx) {
   return target;
 }
 
-function cyclePumpHead(ctx) {
+function cycleHead(ctx) {
   const { R, target } = targetCluster(ctx);
   const a = ctx.node(), b = ctx.node(), c = ctx.node();
   ctx.E(R, a, 2);
   ctx.E(a, b, 2);
   ctx.E(b, c, 2);
   ctx.E(a, c, 2);
+  return target;
+}
+
+function cyclePumpHead(ctx) {
+  const { R, target } = targetCluster(ctx);
+  const gate = ctx.node(), a = ctx.node(), b = ctx.node(), c = ctx.node();
+  ctx.E(R, gate, 2);
+  ctx.E(gate, a, 2);
+  ctx.E(a, b, 2);
+  ctx.E(a, b, 2);
+  ctx.E(b, c, 2);
+  ctx.E(c, a, 2);
   return target;
 }
 
@@ -421,8 +436,9 @@ export function difficultyPlan(d, rng, avoidHead) {
   let pool;
   if (d <= 1) pool = ["single"];                    // gentle first board
   else if (d <= 3) pool = ["single", "and", "or"];  // ease in; single fades after the intro
-  else if (d <= GENERATED_GADGET_THRESHOLDS.lowMax) pool = ["and", "or"];
-  else if (d < GENERATED_GADGET_THRESHOLDS.highStart) pool = ["and", "or", ...MID_GADGETS];
+  else if (d === 4) pool = ["cycle"];                // guarantee a true non-tree board early in every Rush run
+  else if (d <= GENERATED_GADGET_THRESHOLDS.lowMax) pool = ["and", "or", "cycle"];
+  else if (d < GENERATED_GADGET_THRESHOLDS.highStart) pool = ["and", "or", "cycle", ...MID_GADGETS];
   else pool = ["and", "or", "shuttle", ...MID_GADGETS, ...HIGH_GADGETS];
   // "One of a kind": never repeat the previous board's gadget, so consecutive
   // boards always look and play differently — no two near-identical in a row.
@@ -475,6 +491,7 @@ export function diagnosticMetrics(level, { advanced = false } = {}) {
 }
 
 function integratedHead(ctx, plan, rng) {
+  if (plan.head === "cycle") return cycleHead(ctx);
   if (plan.head === "shuttle") return shuttleHead(ctx, plan.len, rng);
   if (plan.head === "latch") return latchHead(ctx, plan.len, rng);
   if (plan.head === "battery") return batteryHead(ctx);

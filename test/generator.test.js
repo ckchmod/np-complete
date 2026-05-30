@@ -12,6 +12,31 @@ import {
 
 const newGadgetHeads = new Set(["latch", "mutex", "cyclePump", "battery", "sharedReservoir"]);
 
+function hasNonRigidUndirectedCycle(level) {
+  const parent = new Map(level.nodes.map((node) => [node.id, node.id]));
+  const find = (x) => {
+    while (parent.get(x) !== x) {
+      parent.set(x, parent.get(parent.get(x)));
+      x = parent.get(x);
+    }
+    return x;
+  };
+  const union = (a, b) => {
+    const ra = find(a), rb = find(b);
+    if (ra === rb) return false;
+    parent.set(ra, rb);
+    return true;
+  };
+  const seenPairs = new Set();
+  for (const edge of level.edges) {
+    const key = [edge.u, edge.v].sort().join("|");
+    if (seenPairs.has(key)) continue;
+    seenPairs.add(key);
+    if (!union(edge.u, edge.v)) return true;
+  }
+  return false;
+}
+
 function sequenceSummary(difficulty, seed, count) {
   const rng = makeRng(seed);
   const rows = [];
@@ -85,6 +110,23 @@ test("a Rush run is diverse: rotating gadgets, rising par, no two alike in a row
   assert.equal(consecutiveSame, 0, `no two consecutive boards share a gadget (${seq.join(",")})`);
   assert.ok(heads.size >= 3, `a run should use several gadget types (got ${[...heads]})`);
   assert.ok(pars.size >= 4, `par should rise/vary across a run (got ${[...pars].sort((a, b) => a - b)})`);
+});
+
+
+test("early Rush progression includes a non-tree topology before high-tier gadgets", () => {
+  for (let seed = 0; seed < 50; seed++) {
+    const rng = makeRng(20260601 + seed);
+    let avoidHead = "";
+    const sampled = [];
+    for (let solved = 0; solved < 7; solved++) {
+      const level = generateLock(1 + solved, rng, avoidHead);
+      avoidHead = level.head;
+      sampled.push(level);
+    }
+
+    assert.ok(sampled.some(hasNonRigidUndirectedCycle),
+      `first seven Rush boards should include a genuine graph cycle for seed ${seed} (heads: ${sampled.map((level) => level.head).join(",")})`);
+  }
 });
 
 test("shuttle boards force backtracking (genuine lookahead, not greedy)", () => {
