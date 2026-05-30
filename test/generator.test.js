@@ -55,6 +55,27 @@ function sequenceSummary(difficulty, seed, count) {
   return rows;
 }
 
+function minGeneratedEdgeSpan(level) {
+  const nodeById = new Map(level.nodes.map((node) => [node.id, node]));
+  let span = Infinity;
+  for (const edge of level.edges) {
+    const a = nodeById.get(edge.u), b = nodeById.get(edge.v);
+    span = Math.min(span, Math.hypot(a.x - b.x, a.y - b.y));
+  }
+  return span;
+}
+
+function minGeneratedNodeSpan(level) {
+  let span = Infinity;
+  for (let i = 0; i < level.nodes.length; i++) {
+    for (let j = i + 1; j < level.nodes.length; j++) {
+      const a = level.nodes[i], b = level.nodes[j];
+      span = Math.min(span, Math.hypot(a.x - b.x, a.y - b.y));
+    }
+  }
+  return span;
+}
+
 test("generated boards are valid, target-locked, non-trivial, and bounded", () => {
   for (let d = 1; d <= 14; d++) {
     for (let i = 0; i < 8; i++) {
@@ -112,6 +133,32 @@ test("a Rush run is diverse: rotating gadgets, rising par, no two alike in a row
   assert.ok(pars.size >= 4, `par should rise/vary across a run (got ${[...pars].sort((a, b) => a - b)})`);
 });
 
+test("generated layouts keep edge endpoints far enough for readable arrows", () => {
+  for (let difficulty = 1; difficulty <= 10; difficulty++) {
+    for (let seed = 0; seed < 20; seed++) {
+      const level = generateLock(difficulty, makeRng(7000 + difficulty * 100 + seed));
+      const span = minGeneratedEdgeSpan(level);
+      assert.ok(
+        span >= 10,
+        `tier ${difficulty} seed ${seed} min edge span ${span.toFixed(1)} is too short for readable arrows`
+      );
+    }
+  }
+});
+
+test("generated layouts keep all nodes far enough to avoid jammed motifs", () => {
+  for (let difficulty = 1; difficulty <= 14; difficulty++) {
+    for (let seed = 0; seed < 20; seed++) {
+      const level = generateLock(difficulty, makeRng(7000 + difficulty * 100 + seed));
+      const span = minGeneratedNodeSpan(level);
+      assert.ok(
+        span >= 10,
+        `tier ${difficulty} seed ${seed} min node span ${span.toFixed(1)} is too short for readable motifs`
+      );
+    }
+  }
+});
+
 
 test("early Rush progression includes a non-tree topology before high-tier gadgets", () => {
   for (let seed = 0; seed < 50; seed++) {
@@ -156,6 +203,19 @@ test("new gadget thresholds keep low tiers classic and unlock richer heads at ti
   assert.equal(difficultyPlan(8, () => 0.7).head, "mutex", "tier 8 unlocks high gadgets");
   assert.equal(difficultyPlan(8, () => 0.85).head, "cyclePump", "tier 8 includes cyclePump");
   assert.equal(difficultyPlan(8, () => 0.99).head, "sharedReservoir", "tier 8 includes sharedReservoir");
+});
+
+test("post-opening Rush tiers leave the single-chain tutorial shape behind", () => {
+  assert.equal(difficultyPlan(1, () => 0).head, "single", "tier 1 keeps the gentle opener");
+  for (let difficulty = 2; difficulty <= 7; difficulty++) {
+    for (const roll of [0, 0.25, 0.5, 0.75, 0.99]) {
+      assert.notEqual(
+        difficultyPlan(difficulty, () => roll).head,
+        "single",
+        `tier ${difficulty} roll ${roll} should not repeat the single-chain shape`
+      );
+    }
+  }
 });
 
 test("difficulty 4 and 5 OR samples stay under the reachable-state sanity cap", () => {

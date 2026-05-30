@@ -43,7 +43,9 @@ const round1 = (x) => Math.round(x * 10) / 10;
 // pairs / sharp angles). Layout dominates generation (tens of ms), well under
 // the between-lock delay.
 const W = 72, H = 116; // interior layout box
-const FIT = { X0: 14, X1: 86, Y0: 22, Y1: 144 };
+const FIT = { X0: 10, X1: 90, Y0: 16, Y1: 150 };
+const MIN_EDGE_SPAN = 12;
+const MIN_NODE_SPAN = 10.5;
 
 // Layered seed: BFS levels from the highest-degree node (the hub/root), placed
 // top-to-bottom with each level spread across x and jittered. A tree drawn in
@@ -159,7 +161,7 @@ function pointSegDist(p, a, b) {
 // then cramped node pairs, then two edges leaving a node at near-equal heading
 // (which visually overlap).
 function layoutScore(n, pairs, pos) {
-  let cross = 0, graze = 0, cramped = 0, sharp = 0;
+  let cross = 0, graze = 0, cramped = 0, shortEdge = 0, sharp = 0;
   for (let i = 0; i < pairs.length; i++) {
     for (let j = i + 1; j < pairs.length; j++) {
       const [a, b] = pairs[i], [c, d] = pairs[j];
@@ -168,6 +170,8 @@ function layoutScore(n, pairs, pos) {
     }
   }
   for (const [a, b] of pairs) {
+    const span = Math.hypot(pos[a].x - pos[b].x, pos[a].y - pos[b].y);
+    if (span < MIN_EDGE_SPAN) shortEdge += MIN_EDGE_SPAN - span;
     for (let v = 0; v < n; v++) {
       if (v === a || v === b) continue;
       if (pointSegDist(pos[v], pos[a], pos[b]) < 7) graze++;
@@ -175,7 +179,7 @@ function layoutScore(n, pairs, pos) {
   }
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
-      if (Math.hypot(pos[i].x - pos[j].x, pos[i].y - pos[j].y) < 11) cramped++;
+      if (Math.hypot(pos[i].x - pos[j].x, pos[i].y - pos[j].y) < MIN_NODE_SPAN) cramped++;
     }
   }
   const adj = Array.from({ length: n }, () => []);
@@ -190,25 +194,88 @@ function layoutScore(n, pairs, pos) {
       }
     }
   }
-  // Weighted so score < 100 iff zero crossings AND zero grazes (the quality
-  // bars); cramped/sharp are minor tiebreakers. Lets forceLayout early-exit.
-  return cross * 1000 + graze * 100 + cramped * 5 + sharp * 15;
+  // Crossings and grazes dominate; short edges outrank minor cramped/sharp ties
+  // because cramped generated arrows collapse visually on the phone board.
+  return cross * 1_000_000 + graze * 10_000 + shortEdge * 1_000 + cramped * 5 + sharp * 15;
+}
+
+function separateShortEdges(pairs, pos) {
+  const out = pos.map((p) => ({ x: p.x, y: p.y }));
+  for (let pass = 0; pass < 40; pass++) {
+    let moved = false;
+    for (const [a, b] of pairs) {
+      let dx = out[b].x - out[a].x, dy = out[b].y - out[a].y;
+      let dist = Math.hypot(dx, dy);
+      if (dist >= MIN_EDGE_SPAN) continue;
+      if (dist < 0.01) { dx = 1; dy = 0; dist = 1; }
+      const push = (MIN_EDGE_SPAN - dist) / 2;
+      const ux = dx / dist, uy = dy / dist;
+      out[a].x = Math.max(FIT.X0, Math.min(FIT.X1, out[a].x - ux * push));
+      out[a].y = Math.max(FIT.Y0, Math.min(FIT.Y1, out[a].y - uy * push));
+      out[b].x = Math.max(FIT.X0, Math.min(FIT.X1, out[b].x + ux * push));
+      out[b].y = Math.max(FIT.Y0, Math.min(FIT.Y1, out[b].y + uy * push));
+      moved = true;
+    }
+    if (!moved) break;
+  }
+  return out;
+}
+
+function separateCloseNodes(n, pos) {
+  const out = pos.map((p) => ({ x: p.x, y: p.y }));
+  for (let pass = 0; pass < 60; pass++) {
+    let moved = false;
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        let dx = out[j].x - out[i].x, dy = out[j].y - out[i].y;
+        let dist = Math.hypot(dx, dy);
+        if (dist >= MIN_NODE_SPAN) continue;
+        if (dist < 0.01) { dx = ((i + j) % 2) ? 1 : -1; dy = ((i + j) % 3) - 1; dist = Math.hypot(dx, dy) || 1; }
+        const push = (MIN_NODE_SPAN - dist) / 2;
+        const ux = dx / dist, uy = dy / dist;
+        out[i].x = Math.max(FIT.X0, Math.min(FIT.X1, out[i].x - ux * push));
+        out[i].y = Math.max(FIT.Y0, Math.min(FIT.Y1, out[i].y - uy * push));
+        out[j].x = Math.max(FIT.X0, Math.min(FIT.X1, out[j].x + ux * push));
+        out[j].y = Math.max(FIT.Y0, Math.min(FIT.Y1, out[j].y + uy * push));
+        moved = true;
+      }
+    }
+    if (!moved) break;
+  }
+  return out;
+}
+
+function separateLayout(n, pairs, pos) {
+  let out = pos;
+  for (let pass = 0; pass < 4; pass++) {
+    out = separateCloseNodes(n, out);
+    out = separateShortEdges(pairs, out);
+  }
+  return separateCloseNodes(n, out);
 }
 
 function forceLayout(ids, edges, rng) {
   const n = ids.length;
   const index = new Map(ids.map((id, i) => [id, i]));
-  const pairs = edges.map((e) => [index.get(e.u), index.get(e.v)]);
+  const seenPairs = new Set();
+  const pairs = [];
+  for (const edge of edges) {
+    const a = index.get(edge.u), b = index.get(edge.v);
+    const key = a < b ? a + "|" + b : b + "|" + a;
+    if (seenPairs.has(key)) continue;
+    seenPairs.add(key);
+    pairs.push([a, b]);
+  }
   let best = null, bestScore = Infinity;
   for (let start = 0; start < 30; start++) {
-    const pos = frSimulate(n, pairs, rng);
+    const pos = fitToBox(reorient(frSimulate(n, pairs, rng), rng));
     const score = layoutScore(n, pairs, pos);
     if (score < bestScore) { bestScore = score; best = pos; }
-    if (bestScore < 100) break; // crossing-free & no grazes — good enough
+    if (bestScore < 1) break;
   }
-  const oriented = fitToBox(reorient(best, rng)); // random rotation/mirror for variety
   const out = {};
-  ids.forEach((id, i) => { out[id] = { x: round1(oriented[i].x), y: round1(oriented[i].y) }; });
+  const spaced = separateLayout(n, pairs, best);
+  ids.forEach((id, i) => { out[id] = { x: round1(spaced[i].x), y: round1(spaced[i].y) }; });
   return out;
 }
 
@@ -435,7 +502,7 @@ export function difficultyPlan(d, rng, avoidHead) {
   // (backtracking / lookahead) once the player has some boards behind them.
   let pool;
   if (d <= 1) pool = ["single"];                    // gentle first board
-  else if (d <= 3) pool = ["single", "and", "or"];  // ease in; single fades after the intro
+  else if (d <= 3) pool = ["and", "or"];
   else if (d === 4) pool = ["cycle"];                // guarantee a true non-tree board early in every Rush run
   else if (d <= GENERATED_GADGET_THRESHOLDS.lowMax) pool = ["and", "or", "cycle"];
   else if (d < GENERATED_GADGET_THRESHOLDS.highStart) pool = ["and", "or", "cycle", ...MID_GADGETS];
