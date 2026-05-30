@@ -267,5 +267,135 @@ export const THE_LOCK = {
   hint: "Reverse the red arrow.",
 };
 
-// All levels, in play order: the five tutorials then the hero board.
-export const LEVELS = [...TUTORIALS, THE_LOCK];
+
+// -- THE LOCK V2 ----------------------------------------------------------------
+// 43 nodes, 51 edges. A deeper flagship board built by scaling THE_LOCK's shuttle
+// head and serial slack-pump ladder, then adding a free reservoir triangle so the
+// reachable component is large enough to feel like real search without hiding the
+// optimal route.
+//
+// Shape:
+//  - The {T,K,S,B} shuttle, pK payload, P0 base, and Y1/Y2 OR-pair are the same
+//    gadget families as THE_LOCK.
+//  - The ladder is extended to Q0..Q30. Solver route still has to pump slack from
+//    the OR-pair back down the chain before pK can feed K.
+//  - R1/R2/R3 is a thick-edge battery/reservoir triangle. It is independent of
+//    the shortest solve, but each node starts with two incoming thick edges so the
+//    component contributes legal search breadth instead of invalid slack.
+//
+// Solver-verified: par = 40, reachable component = 12,272 states, target NOT
+// flippable on move 1, backtracking required, contentionScore = 2.
+export const THE_LOCK_V2 = {
+  id: "the-lock-v2",
+  name: "THE LOCK V2",
+  par: 40,
+  nodes: [
+    // Shuttle head and payload base.
+    { id: "T",  x: 50, y: 150 },
+    { id: "K",  x: 32, y: 140 },
+    { id: "S",  x: 68, y: 140 },
+    { id: "B",  x: 88, y: 152 },
+    { id: "P0", x: 32, y: 126 },
+    { id: "Pa", x: 52, y: 126 },
+    { id: "Pb", x: 72, y: 122 },
+    // Long serial slack-pump ladder, snaked across the phone portrait viewBox.
+    { id: "Q0",  x: 16, y: 110 },
+    { id: "Q1",  x: 32, y: 110 },
+    { id: "Q2",  x: 48, y: 110 },
+    { id: "Q3",  x: 64, y: 110 },
+    { id: "Q4",  x: 80, y: 110 },
+    { id: "Q5",  x: 80, y: 96 },
+    { id: "Q6",  x: 64, y: 96 },
+    { id: "Q7",  x: 48, y: 96 },
+    { id: "Q8",  x: 32, y: 96 },
+    { id: "Q9",  x: 16, y: 96 },
+    { id: "Q10", x: 16, y: 82 },
+    { id: "Q11", x: 32, y: 82 },
+    { id: "Q12", x: 48, y: 82 },
+    { id: "Q13", x: 64, y: 82 },
+    { id: "Q14", x: 80, y: 82 },
+    { id: "Q15", x: 80, y: 68 },
+    { id: "Q16", x: 64, y: 68 },
+    { id: "Q17", x: 48, y: 68 },
+    { id: "Q18", x: 32, y: 68 },
+    { id: "Q19", x: 16, y: 68 },
+    { id: "Q20", x: 16, y: 54 },
+    { id: "Q21", x: 32, y: 54 },
+    { id: "Q22", x: 48, y: 54 },
+    { id: "Q23", x: 64, y: 54 },
+    { id: "Q24", x: 80, y: 54 },
+    { id: "Q25", x: 80, y: 40 },
+    { id: "Q26", x: 64, y: 40 },
+    { id: "Q27", x: 48, y: 40 },
+    { id: "Q28", x: 32, y: 40 },
+    { id: "Q29", x: 16, y: 40 },
+    { id: "Q30", x: 16, y: 26 },
+    // OR-pair starter and search-breadth reservoir.
+    { id: "Y1", x: 38, y: 10 },
+    { id: "Y2", x: 62, y: 10 },
+    { id: "R1", x: 92, y: 8 },
+    { id: "R2", x: 98, y: 26 },
+    { id: "R3", x: 92, y: 44 },
+  ],
+  edges: [
+    // Head / shuttle gadget.
+    { id: "SB", u: "S", v: "B", w: 2, dir: "uv" },
+    { id: "ST", u: "S", v: "T", w: 1, dir: "uv" },
+    { id: "KT", u: "K", v: "T", w: 2, dir: "uv" },
+    { id: "KS", u: "K", v: "S", w: 1, dir: "uv" },
+    { id: "TS", u: "T", v: "S", w: 1, dir: "uv" },
+    { id: "SK", u: "S", v: "K", w: 2, dir: "uv" },
+    // Payload into K, gated by the long ladder.
+    { id: "pK",   u: "K",  v: "P0", w: 1, dir: "uv" },
+    { id: "PaIn", u: "Pa", v: "P0", w: 1, dir: "uv" },
+    { id: "Pa_a", u: "Pa", v: "Pb", w: 2, dir: "uv" },
+    { id: "Pa_b", u: "Pa", v: "Pb", w: 2, dir: "vu" },
+    { id: "q0",  u: "P0",  v: "Q0",  w: 2, dir: "uv" },
+    { id: "q1",  u: "Q0",  v: "Q1",  w: 2, dir: "uv" },
+    { id: "q2",  u: "Q1",  v: "Q2",  w: 2, dir: "uv" },
+    { id: "q3",  u: "Q2",  v: "Q3",  w: 2, dir: "uv" },
+    { id: "q4",  u: "Q3",  v: "Q4",  w: 2, dir: "uv" },
+    { id: "q5",  u: "Q4",  v: "Q5",  w: 2, dir: "uv" },
+    { id: "q6",  u: "Q5",  v: "Q6",  w: 2, dir: "uv" },
+    { id: "q7",  u: "Q6",  v: "Q7",  w: 2, dir: "uv" },
+    { id: "q8",  u: "Q7",  v: "Q8",  w: 2, dir: "uv" },
+    { id: "q9",  u: "Q8",  v: "Q9",  w: 2, dir: "uv" },
+    { id: "q10", u: "Q9",  v: "Q10", w: 2, dir: "uv" },
+    { id: "q11", u: "Q10", v: "Q11", w: 2, dir: "uv" },
+    { id: "q12", u: "Q11", v: "Q12", w: 2, dir: "uv" },
+    { id: "q13", u: "Q12", v: "Q13", w: 2, dir: "uv" },
+    { id: "q14", u: "Q13", v: "Q14", w: 2, dir: "uv" },
+    { id: "q15", u: "Q14", v: "Q15", w: 2, dir: "uv" },
+    { id: "q16", u: "Q15", v: "Q16", w: 2, dir: "uv" },
+    { id: "q17", u: "Q16", v: "Q17", w: 2, dir: "uv" },
+    { id: "q18", u: "Q17", v: "Q18", w: 2, dir: "uv" },
+    { id: "q19", u: "Q18", v: "Q19", w: 2, dir: "uv" },
+    { id: "q20", u: "Q19", v: "Q20", w: 2, dir: "uv" },
+    { id: "q21", u: "Q20", v: "Q21", w: 2, dir: "uv" },
+    { id: "q22", u: "Q21", v: "Q22", w: 2, dir: "uv" },
+    { id: "q23", u: "Q22", v: "Q23", w: 2, dir: "uv" },
+    { id: "q24", u: "Q23", v: "Q24", w: 2, dir: "uv" },
+    { id: "q25", u: "Q24", v: "Q25", w: 2, dir: "uv" },
+    { id: "q26", u: "Q25", v: "Q26", w: 2, dir: "uv" },
+    { id: "q27", u: "Q26", v: "Q27", w: 2, dir: "uv" },
+    { id: "q28", u: "Q27", v: "Q28", w: 2, dir: "uv" },
+    { id: "q29", u: "Q28", v: "Q29", w: 2, dir: "uv" },
+    { id: "q30", u: "Q29", v: "Q30", w: 2, dir: "uv" },
+    { id: "y1", u: "Q30", v: "Y1", w: 1, dir: "uv" },
+    { id: "y2", u: "Q30", v: "Y2", w: 1, dir: "uv" },
+    { id: "ya", u: "Y1", v: "Y2", w: 2, dir: "uv" },
+    { id: "yb", u: "Y1", v: "Y2", w: 2, dir: "vu" },
+    // Battery/reservoir triangle: three bidirectional thick pairs.
+    { id: "r12", u: "R1", v: "R2", w: 2, dir: "uv" },
+    { id: "r21", u: "R1", v: "R2", w: 2, dir: "vu" },
+    { id: "r23", u: "R2", v: "R3", w: 2, dir: "uv" },
+    { id: "r32", u: "R2", v: "R3", w: 2, dir: "vu" },
+    { id: "r31", u: "R3", v: "R1", w: 2, dir: "uv" },
+    { id: "r13", u: "R3", v: "R1", w: 2, dir: "vu" },
+  ],
+  target: "KT",
+  hint: "The old shuttle is still there, but the ladder is much deeper.",
+};
+
+// All levels, in play order: tutorials, original hero board, then the V2 flagship.
+export const LEVELS = [...TUTORIALS, THE_LOCK, THE_LOCK_V2];

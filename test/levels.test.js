@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 
 import { makeConfig, inflow, isLegalFlip } from "../src/engine.js";
 import { bfsSolve, nonTrivialityReport } from "../src/solver.js";
-import { TUTORIALS, THE_LOCK, LEVELS } from "../src/levels.js";
+import { allMetrics } from "../src/difficultyMetrics.js";
+import { TUTORIALS, THE_LOCK, THE_LOCK_V2, LEVELS } from "../src/levels.js";
 
 // ---------------------------------------------------------------------------
 // Exports / shape
@@ -14,9 +15,9 @@ test("TUTORIALS is an array of 6 levels", () => {
   assert.equal(TUTORIALS.length, 6);
 });
 
-test("LEVELS is the tutorials followed by THE LOCK", () => {
-  assert.deepEqual(LEVELS, [...TUTORIALS, THE_LOCK]);
-  assert.equal(LEVELS.length, 7);
+test("LEVELS is the tutorials followed by THE LOCK and THE LOCK V2", () => {
+  assert.deepEqual(LEVELS, [...TUTORIALS, THE_LOCK, THE_LOCK_V2]);
+  assert.equal(LEVELS.length, 8);
 });
 
 test("every level conforms to the engine Level shape", () => {
@@ -165,4 +166,29 @@ test("THE LOCK: reachableCount is the full reachable-component size (spec §14 b
   const { reachableCount, exhausted } = bfsSolve(THE_LOCK);
   assert.equal(exhausted, false, "BFS hit the state cap; component size is only a lower bound");
   assert.equal(reachableCount, 92, "reachable component should be 92 states (matches levels.js)");
+});
+
+test("THE LOCK V2: config validates and starts legal", () => {
+  const config = makeConfig(THE_LOCK_V2);
+  for (const node of THE_LOCK_V2.nodes) {
+    assert.ok(inflow(config, node.id) >= 2, `node ${node.id} starts below inflow 2`);
+  }
+});
+
+test("THE LOCK V2: solver gates match flagship targets", () => {
+  const report = nonTrivialityReport(THE_LOCK_V2);
+  assert.ok(report.solvable);
+  assert.equal(report.optimalLength, THE_LOCK_V2.par);
+  assert.ok(report.optimalLength >= 40, `optimal ${report.optimalLength} < 40`);
+  assert.ok(report.optimalLength <= 60, `optimal ${report.optimalLength} > 60`);
+  assert.ok(report.reachableCount >= 10_000, `reachable ${report.reachableCount} < 10000`);
+  assert.ok(report.notTrivialMove1, "target should not be flippable on move 1");
+  assert.ok(report.backtrackingRequired, "greedy hill-climb reached the goal; no backtracking forced");
+});
+
+test("THE LOCK V2: resource contention appears on shortest paths", () => {
+  const metrics = allMetrics(THE_LOCK_V2);
+  assert.equal(metrics.partial, false);
+  assert.ok(metrics.contentionScore > 0, "expected shared critical edges on shortest paths");
+  assert.ok(metrics.resourceContention > 0, "expected target-slack contention along shortest paths");
 });

@@ -8,7 +8,7 @@
 // Note: src/levels.js is imported at runtime; it may not exist yet when this
 // file is created. That is expected — running the CLI requires it.
 
-import { THE_LOCK, TUTORIALS } from "../src/levels.js";
+import { THE_LOCK, THE_LOCK_V2, TUTORIALS } from "../src/levels.js";
 import { bfsSolve, nonTrivialityReport } from "../src/solver.js";
 
 try {
@@ -19,6 +19,7 @@ try {
 
   const report = {
     theLock: nonTrivialityReport(THE_LOCK),
+    theLockV2: nonTrivialityReport(THE_LOCK_V2),
     tutorials,
     tutorialsAllSolvable: tutorials.every((t) => t.solvable),
   };
