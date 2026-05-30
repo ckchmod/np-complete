@@ -1,7 +1,7 @@
 // THE LOCK — non-triviality gate CLI.
 //
 // Prints ONE JSON object to stdout (and nothing else) summarizing the solver
-// gates for THE LOCK and the tutorials. Exit 0 on success, non-zero on error.
+// gates for THE LOCK, THE_LOCK_V2, and the tutorials. Exit 0 on success, non-zero on error.
 //
 //   node scripts/gates.mjs
 //

@@ -26,14 +26,14 @@ np-complete/
 | Browser entry / flow | `index.html`, `src/main.js` | `index.html` declares hard-coded IDs; `main.js` toggles intro, mode hub, tutorials, Rush, Battle, and service worker registration. |
 | NCL legality | `src/engine.js` | Pure logic. No DOM. Inflow invariant lives here. |
 | Solver gates / par | `src/solver.js`, `scripts/gates.mjs` | BFS computes optimal length and non-triviality reports. |
-| Authored levels | `src/levels.js` | Source of truth for tutorials, THE_LOCK, `par`, `target`, node layout. |
+| Authored levels | `src/levels.js` | Source of truth for tutorials, THE_LOCK, THE_LOCK_V2, `par`, `target`, node layout. |
 | Rush generation | `src/generator.js`, `src/rush.js` | Generator composes gadgets, validates by solver, then Rush budgets/strikes. |
 | Battle rules / AI | `src/battleEngine.js`, `src/battleSolver.js`, `src/battleGenerator.js`, `src/battle.js`, `src/aiBattle.js` | Battle is a finite charged NCL game. Battle vs AI is local deterministic rule/search code, not an LLM or service. |
 | Replay surfaces | `src/replay.js`, `src/replayUI.js`, `src/battleReplay.js` | Replay and post-game Battle analysis. Hide analysis during active play. |
 | PWA / offline | `manifest.json`, `sw.js`, `src/main.js` | Static installable shell, offline cache, and service worker update notice. |
 | SVG board contract | `src/render.js`, `styles.css` | CSS classes/data attrs are coupled to renderer output. |
 | Tutorial session state | `src/game.js` | Move history, undo/reset, localStorage resume, scoring/share. |
-| Tests | `test/*.test.js` | 182 current node:test cases at this milestone; avoid hard-coding counts in README. |
+| Tests | `test/*.test.js` | 193 current node:test cases at this milestone; avoid hard-coding counts in README. |
 | Product/spec intent | `docs/superpowers/specs/*.md` | Use for domain decisions before changing mechanics. |
 
 ## CODE MAP
@@ -49,7 +49,7 @@ np-complete/
 | `createGame` | function | `src/game.js` | Tutorial-mode controller. |
 | `createRush` | function | `src/rush.js` | Survival-mode controller. |
 | `createBattle` | function | `src/battle.js` | Battle Hot-seat and Battle vs AI controller. |
-| `TUTORIALS`, `THE_LOCK`, `LEVELS` | constants | `src/levels.js` | Authored game data. |
+| `TUTORIALS`, `THE_LOCK`, `THE_LOCK_V2`, `LEVELS` | constants | `src/levels.js` | Authored game data. |
 
 ## CONVENTIONS
 - ESM only: package has `"type": "module"`; local imports include explicit `.js`.
@@ -81,7 +81,7 @@ np-complete/
 - Rush boards are generated live, seeded with `makeRng`, capped for phone legibility, and solver-verified before display.
 - The mode hub exposes Tutorial, Puzzle Rush, Battle Hot-seat, and Battle vs AI after the intro.
 - Help is context-aware: tutorial intro outside active modes, Rush rules inside Rush, Battle rules inside Battle.
-- Current source has 6 tutorials and tests have 182 cases at this milestone; older prose may still say 5 tutorials / 44 or 117 tests.
+- Current source has 6 tutorials and tests have 193 cases at this milestone; older prose may still say 5 tutorials / 44, 117, 182, 185, 186, 190, or 192 tests.
 
 ## WORKFLOW
 - After every significant milestone, update relevant docs and push the branch once verification passes.
@@ -93,10 +93,10 @@ np-complete/
 npm start          # python3 -m http.server 8000; open http://localhost:8000
 npm test           # node --test
 node --test test/engine.test.js
-npm run gates      # JSON solver gates for THE LOCK + tutorials
+npm run gates      # JSON solver gates for THE LOCK, THE_LOCK_V2, tutorials
 ```
 
 ## NOTES
-- Baseline on 2026-05-30 after the popular-phone-game milestone: `npm test` passes 182/182; `npm run gates` reports THE_LOCK optimal 16, reachableCount 92, backtracking required.
+- Baseline on 2026-05-30 after the end-to-end quality review: `npm test` passes 193/193; `npm run gates` reports THE_LOCK optimal 16, reachableCount 92, THE_LOCK_V2 optimal 40, reachableCount 24544, and backtracking required.
 - `.nojekyll` is present for GitHub Pages static hosting.
 - Root `CLAUDE.md` already mandates simple, surgical, goal-verified changes; keep AGENTS guidance project-specific.

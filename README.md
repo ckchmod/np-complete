@@ -89,7 +89,7 @@ hostname -I
 
 ```bash
 npm test           # node --test across engine, solver, levels, metrics, generator, Rush, Battle, replay, PWA, render, and main flow
-npm run gates      # prints the solver gates (THE LOCK + tutorials) as JSON
+npm run gates      # prints the solver gates (THE LOCK, THE_LOCK_V2, tutorials) as JSON
 ```
 
 ## Manual offline QA checklist
@@ -110,7 +110,7 @@ npm run gates      # prints the solver gates (THE LOCK + tutorials) as JSON
 | `src/difficultyMetrics.js` | Reachability, par, diameter, branching, path, slack, and contention metrics |
 | `src/gadgetBuilders.js` | Standalone gadget fixtures and metadata for richer generated lock families |
 | `src/generator.js` | Live Rush generator with solver verification, gadget-family sampling, and diagnostics hooks |
-| `src/levels.js` | 6 tutorials plus the original hand-tuned **THE LOCK** board (optimal 16, a bonus board outside Rush) |
+| `src/levels.js` | 6 tutorials plus authored **THE LOCK** and **THE_LOCK_V2** boards outside Rush |
 | `src/render.js` | SVG board: curved edges, weight-scaled arrowheads, slack glow, red targets, ghost markers, flip animation, and Battle badges |
 | `src/game.js` | Tutorial controller: moves, undo/reset, par/stars/score, localStorage, share + path hash |
 | `src/rush.js` | Puzzle Rush: endless generated locks, move budget, 3 strikes, difficulty ramp |
