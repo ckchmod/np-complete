@@ -46,6 +46,7 @@ export function createRush({ mountEl, seed, onGameOver, levelFactory = generateL
   const strikesEl = mountEl.querySelector("#rush-strikes");
   const movesEl = mountEl.querySelector("#rush-moves");
   const btnSkip = mountEl.querySelector("#btn-skip");
+  const btnUndo = mountEl.querySelector("#btn-undo");
   const toastEl = mountEl.querySelector("#rush-toast");
 
   const rng = makeRng(seed >>> 0);
@@ -57,6 +58,7 @@ export function createRush({ mountEl, seed, onGameOver, levelFactory = generateL
   let board = null;
   let moves = 0;
   let budget = 0;
+  let history = [];
   let locked = false; // input frozen during solve/strike transitions
   let over = false;
   let lastHead = ""; // gadget of the previous board, so the next is a different kind
@@ -101,6 +103,7 @@ export function createRush({ mountEl, seed, onGameOver, levelFactory = generateL
       movesEl.textContent = moves + " / " + budget;
       movesEl.classList.toggle("low", budget > 0 && budget - moves <= 2); // amber warning near the cap
     }
+    if (btnUndo) btnUndo.disabled = over || locked || moves === 0 || history.length === 0;
     renderStrikes();
   }
 
@@ -120,6 +123,7 @@ export function createRush({ mountEl, seed, onGameOver, levelFactory = generateL
     config = makeConfig(level);
     moves = 0;
     budget = moveBudget(level.par);
+    history = [];
     if (board) board.destroy(); // cancel the previous board's cascade timers before rebuild
     board = createBoard(svgEl, config, { onEdgeTap: handleTap });
     board.markLegal(legalFlips(config));
@@ -137,6 +141,7 @@ export function createRush({ mountEl, seed, onGameOver, levelFactory = generateL
       board.explainIllegal(edgeId, receiver, inflow(config, receiver), edge.w);
       return;
     }
+    history.push(config);
     config = applyFlip(config, edgeId);
     moves++;
     board.update(config);
@@ -155,14 +160,26 @@ export function createRush({ mountEl, seed, onGameOver, levelFactory = generateL
     }
   }
 
+  function undoMove() {
+    if (over || locked || moves === 0 || history.length === 0) return;
+    config = history.pop();
+    moves++;
+    board.update(config);
+    board.markLegal(legalFlips(config));
+    updateHUD();
+    if (moves >= budget && !isSolved(config)) strike();
+  }
+
   function strike() {
     if (over) return;
     strikes++;
     locked = true;
+    history = [];
     renderStrikes();
     if (board) board.strikeFlash();           // red flash + shake on the board
     if (strikesEl) { strikesEl.classList.remove("struck"); void strikesEl.offsetWidth; strikesEl.classList.add("struck"); }
     try { if (navigator.vibrate) navigator.vibrate(60); } catch (_) {}
+    updateHUD();
     if (strikes >= STRIKES_MAX) {
       schedule(gameOver, STRIKE_DELAY);
     } else {
@@ -190,6 +207,7 @@ export function createRush({ mountEl, seed, onGameOver, levelFactory = generateL
   }
 
   if (btnSkip) btnSkip.addEventListener("click", onSkip);
+  if (btnUndo) btnUndo.addEventListener("click", undoMove);
 
   // Kick off the run.
   loadNext();
@@ -202,6 +220,7 @@ export function createRush({ mountEl, seed, onGameOver, levelFactory = generateL
       if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
       if (board) board.destroy();
       if (btnSkip) btnSkip.removeEventListener("click", onSkip);
+      if (btnUndo) btnUndo.removeEventListener("click", undoMove);
     },
     pause,  // freeze the in-flight transition while the "?" rules overlay is open
     resume, // resume it when the overlay closes

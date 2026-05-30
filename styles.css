@@ -680,7 +680,7 @@ html, body {
 .mode-rush #rush-controls { display: flex; }
 #rush-hud { align-items: baseline; gap: 6px; }
 #rush-strikes.strikes { color: var(--c-target); letter-spacing: 0.18em; }
-#rush-controls { justify-content: center; }
+#rush-controls { justify-content: center; gap: var(--space-2); }
 
 .mode-battle .tutorial-only { display: none; }
 .mode-battle #hud,
