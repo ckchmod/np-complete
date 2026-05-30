@@ -5,7 +5,7 @@
 // strikes ends the run. Difficulty ramps with your score. Generation is live
 // and runs in tens of ms (layout-dominated), well within the post-solve delay.
 
-import { makeConfig, isLegalFlip, legalFlips, applyFlip, isSolved } from "./engine.js";
+import { makeConfig, isLegalFlip, legalFlips, applyFlip, isSolved, inflow } from "./engine.js";
 import { createBoard } from "./render.js";
 import { generateLock, makeRng } from "./generator.js";
 
@@ -40,7 +40,7 @@ function saveBest(n) {
   try { localStorage.setItem(STORAGE_BEST, String(n)); } catch (_) {}
 }
 
-export function createRush({ mountEl, seed, onGameOver }) {
+export function createRush({ mountEl, seed, onGameOver, levelFactory = generateLock } = {}) {
   const svgEl = mountEl.querySelector("#board");
   const scoreEl = mountEl.querySelector("#rush-score");
   const strikesEl = mountEl.querySelector("#rush-strikes");
@@ -82,7 +82,7 @@ export function createRush({ mountEl, seed, onGameOver }) {
   function generate(d) {
     // Pass the previous gadget so the next board is a DIFFERENT kind (no two
     // near-identical boards in a row). generateLock retries + verifies internally.
-    const L = generateLock(d, rng, lastHead) || generateLock(1, rng, lastHead);
+    const L = levelFactory(d, rng, lastHead) || levelFactory(1, rng, lastHead);
     if (L) lastHead = L.head;
     return L;
   }
@@ -132,7 +132,9 @@ export function createRush({ mountEl, seed, onGameOver }) {
     if (!isLegalFlip(config, edgeId)) {
       board.shakeEdge(edgeId);
       const edge = config.edgeById.get(edgeId);
-      board.pulseNode(config.dirs.get(edgeId) === "uv" ? edge.v : edge.u);
+      const receiver = config.dirs.get(edgeId) === "uv" ? edge.v : edge.u;
+      board.pulseNode(receiver);
+      board.explainIllegal(edgeId, receiver, inflow(config, receiver), edge.w);
       return;
     }
     config = applyFlip(config, edgeId);

@@ -331,6 +331,76 @@ html, body {
 .board.is-battle .edge-group.is-opponent.is-target,
 .board.is-battle .edge-group.is-opponent.is-target-b { opacity: var(--battle-target-dim); }
 
+.edge-group.is-illegal-edge .edge-line,
+.edge-group.is-illegal-edge .edge-arrow {
+  stroke: var(--c-slack);
+  fill: var(--c-slack);
+}
+
+.node-group.is-illegal-receiver .node-ring {
+  stroke: var(--c-slack);
+}
+
+.node-group.is-illegal-receiver .node-glow {
+  opacity: 0.88;
+  stroke: var(--c-slack);
+}
+
+.illegal-explain {
+  pointer-events: none;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: illegal-pop 0.32s ease-out both;
+}
+
+.illegal-explain-layer {
+  pointer-events: none;
+}
+
+.illegal-explain-text {
+  fill: var(--c-white);
+  font-family: var(--font-label);
+  font-size: 3.2px;
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+@keyframes illegal-pop {
+  0% { opacity: 0; transform: translateY(2px) scale(0.82); }
+  60% { opacity: 1; transform: translateY(0) scale(1.06); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes illegal-flash {
+  0% { fill: var(--c-white); opacity: 0.35; }
+  45% { fill: var(--c-target); opacity: 1; }
+  100% { fill: var(--c-target); opacity: 0.95; }
+}
+
+.illegal-explain-current,
+.illegal-explain-weight {
+  animation: illegal-pop 0.32s ease-out both;
+}
+
+.illegal-explain-weight {
+  fill: var(--c-slack);
+}
+
+.illegal-explain-result,
+.illegal-explain-low {
+  animation: illegal-flash 0.7s ease-out both;
+}
+
+.illegal-explain-result {
+  fill: var(--c-target);
+}
+
+.illegal-explain-low {
+  fill: var(--c-target);
+  font-size: 2.8px;
+}
+
 /* Shake animation for illegal tap */
 @keyframes shake {
   0%   { transform: translateX(0); }
@@ -860,9 +930,15 @@ html, body {
   .edge-group.is-shaking,
   .node-group.is-pulsing .node-ring,
   .node-group.is-win-pulsing .node-ring,
+  .node-group.is-illegal-receiver .node-ring,
   .board.is-strike,
   #rush-strikes.struck,
   #rush-moves.low,
-  .result-card.visible { animation: none !important; }
+  .result-card.visible,
+  .illegal-explain,
+  .illegal-explain-current,
+  .illegal-explain-weight,
+  .illegal-explain-result,
+  .illegal-explain-low { animation: none !important; }
   * { transition-duration: 0.01ms !important; }
 }

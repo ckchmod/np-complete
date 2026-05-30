@@ -26,6 +26,7 @@ const ARROW_MAX_LEN = 4.8; // longest arrowhead (thick) — for viewBox padding
 const ENDPOINT_GAP = NODE_R + 0.8; // stop strokes short of the node ring
 const BOW_STEP = 13; // perpendicular control-point offset between parallels
 const REVERSAL_MS = 300; // arrow reversal animation duration
+const ILLEGAL_EXPLAIN_MS = 2000;
 const CHARGE_BADGE_R = 3.1;
 const CHARGE_BADGE_OFFSET = 5.2;
 
@@ -219,11 +220,15 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
 
   const edgeLayer = el("g", { class: "edge-layer" });
   const nodeLayer = el("g", { class: "node-layer" });
+  const explainLayer = el("g", { class: "illegal-explain-layer" });
   svgEl.appendChild(edgeLayer);
   svgEl.appendChild(nodeLayer);
+  svgEl.appendChild(explainLayer);
 
   const edgeViews = new Map();
   const nodeViews = new Map();
+  let illegalExplainTimer = null;
+  let illegalExplainCleanup = null;
 
   // --- Build edges -----------------------------------------------------------
   for (const edge of config.level.edges) {
@@ -313,6 +318,7 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
   // --- Public view API -------------------------------------------------------
 
   function update(nextConfig) {
+    clearIllegalExplanation();
     setBattleFrame(svgEl, nextConfig);
     for (const edge of nextConfig.level.edges) {
       const view = edgeViews.get(edge.id);
@@ -379,6 +385,80 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
     );
   }
 
+  function clearIllegalExplanation() {
+    if (illegalExplainTimer) {
+      clearTimeout(illegalExplainTimer);
+      illegalExplainTimer = null;
+    }
+    if (!illegalExplainCleanup) return;
+    illegalExplainCleanup();
+    illegalExplainCleanup = null;
+  }
+
+  function explainIllegal(edgeId, nodeId, currentInflow, edgeWeight) {
+    clearIllegalExplanation();
+    const edgeView = edgeViews.get(edgeId);
+    const nodeView = nodeViews.get(nodeId);
+    if (!edgeView || !nodeView) return;
+
+    const edgePoint = chargeBadgePoint(edgeView.curve);
+    const edgeExplain = el("g", {
+      class: "illegal-explain illegal-explain-edge",
+      transform: `translate(${edgePoint.x} ${edgePoint.y})`,
+    });
+    const edgeWeightText = el("text", {
+      class: "illegal-explain-text illegal-explain-weight",
+      y: "0.45",
+    });
+    edgeWeightText.textContent = String(edgeWeight);
+    edgeExplain.appendChild(edgeWeightText);
+
+    const nodePoint = nodeById.get(nodeId);
+    const nodeExplain = el("g", {
+      class: "illegal-explain illegal-explain-node",
+      transform: `translate(${nodePoint.x} ${nodePoint.y})`,
+    });
+    const currentText = el("text", {
+      class: "illegal-explain-text illegal-explain-current",
+      x: "0",
+      y: "-4.5",
+    });
+    currentText.textContent = String(currentInflow);
+    const resultText = el("text", {
+      class: "illegal-explain-text illegal-explain-result",
+      x: "0",
+      y: "6.0",
+    });
+    resultText.textContent = String(currentInflow - edgeWeight);
+    const lowText = el("text", {
+      class: "illegal-explain-text illegal-explain-low",
+      x: "0",
+      y: "10.5",
+    });
+    lowText.textContent = "< 2";
+    nodeExplain.appendChild(currentText);
+    nodeExplain.appendChild(resultText);
+    nodeExplain.appendChild(lowText);
+
+    edgeView.group.classList.add("is-illegal-edge");
+    nodeView.group.classList.add("is-illegal-receiver");
+    explainLayer.appendChild(nodeExplain);
+    explainLayer.appendChild(edgeExplain);
+
+    illegalExplainCleanup = () => {
+      edgeView.group.classList.remove("is-illegal-edge");
+      nodeView.group.classList.remove("is-illegal-receiver");
+      if (nodeExplain.parentNode === explainLayer) explainLayer.removeChild(nodeExplain);
+      if (edgeExplain.parentNode === explainLayer) explainLayer.removeChild(edgeExplain);
+      svgEl.classList.remove("has-illegal-explain");
+    };
+    svgEl.classList.add("has-illegal-explain");
+    illegalExplainTimer = setTimeout(() => {
+      illegalExplainTimer = null;
+      clearIllegalExplanation();
+    }, ILLEGAL_EXPLAIN_MS);
+  }
+
   function pulseClass(nodeId, cls) {
     if (prefersReducedMotion()) return; // see shakeEdge: suppressed animation would strand the class + leak the listener
     const view = nodeViews.get(nodeId);
@@ -432,11 +512,12 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
   // Cancel any in-flight win-cascade timers — called before a rebuild / on
   // teardown so late pulses don't fire against the next board's nodes.
   function destroy() {
+    clearIllegalExplanation();
     cascadeTimers.forEach(clearTimeout);
     cascadeTimers = [];
   }
 
-  return { update, markLegal, shakeEdge, pulseNode: pulse, winCascade, clearWin, strikeFlash, destroy };
+  return { update, markLegal, shakeEdge, pulseNode: pulse, explainIllegal, winCascade, clearWin, strikeFlash, destroy };
 }
 
 // --- helpers operating on a config -------------------------------------------
