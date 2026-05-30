@@ -52,10 +52,9 @@ function reflow(node) {
   void node.getBoundingClientRect();
 }
 
-function restartClass(node, cls) {
-  node.classList.remove(cls);
-  reflow(node);
-  requestAnimationFrame(() => node.classList.add(cls));
+function cancelFrame(id) {
+  if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(id);
+  else clearTimeout(id);
 }
 
 function unit(dx, dy) {
@@ -209,6 +208,7 @@ function applyBattleEdgeState(config, edgeViews) {
 export function createBoard(svgEl, config, { onEdgeTap } = {}) {
   const nodeById = new Map(config.level.nodes.map((n) => [n.id, n]));
   let current = config;
+  let destroyed = false;
 
   svgEl.classList.add("board");
   svgEl.classList.remove("is-won"); // reset win state; this <svg> is reused per lock
@@ -229,6 +229,50 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
   const nodeViews = new Map();
   let illegalExplainTimer = null;
   let illegalExplainCleanup = null;
+  let tapTimers = [];
+  const pendingTimeouts = new Set();
+  const pendingFrames = new Set();
+
+  function scheduleTimeout(fn, delay) {
+    if (destroyed) return null;
+    const id = setTimeout(() => {
+      pendingTimeouts.delete(id);
+      if (!destroyed) fn();
+    }, delay);
+    pendingTimeouts.add(id);
+    return id;
+  }
+
+  function clearScheduledTimeout(id) {
+    if (id == null) return;
+    clearTimeout(id);
+    pendingTimeouts.delete(id);
+  }
+
+  function scheduleFrame(fn) {
+    if (destroyed) return null;
+    let id = null;
+    let fired = false;
+    id = requestAnimationFrame((now) => {
+      if (id !== null) pendingFrames.delete(id);
+      else fired = true;
+      if (!destroyed) fn(now);
+    });
+    if (!fired) pendingFrames.add(id);
+    return id;
+  }
+
+  function clearScheduledFrame(id) {
+    if (id == null) return;
+    cancelFrame(id);
+    pendingFrames.delete(id);
+  }
+
+  function restartClassTracked(node, cls) {
+    node.classList.remove(cls);
+    reflow(node);
+    scheduleFrame(() => node.classList.add(cls));
+  }
 
   // --- Build edges -----------------------------------------------------------
   for (const edge of config.level.edges) {
@@ -305,7 +349,11 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
         touched = true;
         e.preventDefault();
         handler();
-        setTimeout(() => (touched = false), 400);
+        const timer = scheduleTimeout(() => {
+          touched = false;
+          tapTimers = tapTimers.filter((id) => id !== timer);
+        }, 400);
+        tapTimers.push(timer);
       },
       { passive: false }
     );
@@ -318,6 +366,7 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
   // --- Public view API -------------------------------------------------------
 
   function update(nextConfig) {
+    if (destroyed) return;
     clearIllegalExplanation();
     setBattleFrame(svgEl, nextConfig);
     for (const edge of nextConfig.level.edges) {
@@ -349,21 +398,23 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
     view.line.setAttribute("d", curvePath(c)); // full curve while the head glides
     const t0 = performance.now();
     function frame(now) {
+      if (destroyed) return;
       const k = Math.min(1, (now - t0) / REVERSAL_MS);
       const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
       view.arrow.setAttribute("d", arrowPathAtT(c, fromT + (toT - fromT) * e, dirSign, len, half));
-      if (k < 1) requestAnimationFrame(frame);
+      if (k < 1) scheduleFrame(frame);
       else {
         const head = toT === 1 ? "B" : "A";
         view.arrow.setAttribute("d", arrowPathFor(c, head, len, half));
         view.line.setAttribute("d", linePath(c, head, len));
       }
     }
-    requestAnimationFrame(frame);
+    scheduleFrame(frame);
   }
 
   // Affordance on flippable edges; raise them so a tap lands on a legal edge.
   function markLegal(edgeIds) {
+    if (destroyed) return;
     const legal = new Set(edgeIds || []);
     for (const [id, view] of edgeViews) {
       view.group.classList.toggle("is-legal", legal.has(id));
@@ -374,10 +425,11 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
   }
 
   function shakeEdge(edgeId) {
+    if (destroyed) return;
     if (prefersReducedMotion()) return; // no animation => animationend never fires => class + listener would leak
     const view = edgeViews.get(edgeId);
     if (!view) return;
-    restartClass(view.group, "is-shaking");
+    restartClassTracked(view.group, "is-shaking");
     view.group.addEventListener(
       "animationend",
       () => view.group.classList.remove("is-shaking"),
@@ -387,7 +439,7 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
 
   function clearIllegalExplanation() {
     if (illegalExplainTimer) {
-      clearTimeout(illegalExplainTimer);
+      clearScheduledTimeout(illegalExplainTimer);
       illegalExplainTimer = null;
     }
     if (!illegalExplainCleanup) return;
@@ -396,6 +448,7 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
   }
 
   function explainIllegal(edgeId, nodeId, currentInflow, edgeWeight) {
+    if (destroyed) return;
     clearIllegalExplanation();
     const edgeView = edgeViews.get(edgeId);
     const nodeView = nodeViews.get(nodeId);
@@ -453,17 +506,18 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
       svgEl.classList.remove("has-illegal-explain");
     };
     svgEl.classList.add("has-illegal-explain");
-    illegalExplainTimer = setTimeout(() => {
+    illegalExplainTimer = scheduleTimeout(() => {
       illegalExplainTimer = null;
       clearIllegalExplanation();
     }, ILLEGAL_EXPLAIN_MS);
   }
 
   function pulseClass(nodeId, cls) {
+    if (destroyed) return;
     if (prefersReducedMotion()) return; // see shakeEdge: suppressed animation would strand the class + leak the listener
     const view = nodeViews.get(nodeId);
     if (!view) return;
-    restartClass(view.group, cls);
+    restartClassTracked(view.group, cls);
     view.group.addEventListener(
       "animationend",
       () => view.group.classList.remove(cls),
@@ -478,20 +532,22 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
 
   let cascadeTimers = []; // tracked so destroy() can cancel a cascade mid-flight
   function winCascade() {
+    if (destroyed) return;
     svgEl.classList.add("is-won"); // win colour applies via .board.is-won regardless
     if (prefersReducedMotion()) return; // skip the staggered pulse cascade
     const order = cascadeOrder(current);
     // Clamp the per-node stagger so the whole cascade finishes within the
     // post-solve delay even on big boards (a fixed 90ms overran and got cut off).
     const step = Math.min(90, Math.floor(360 / Math.max(1, order.length - 1)));
-    order.forEach((nodeId, i) => cascadeTimers.push(setTimeout(() => pulseClass(nodeId, "is-win-pulsing"), i * step)));
+    order.forEach((nodeId, i) => cascadeTimers.push(scheduleTimeout(() => pulseClass(nodeId, "is-win-pulsing"), i * step)));
   }
 
   // Brief red flash + shake on the whole board when a life is lost — the most
   // consequential event should be the most felt (previously it had no board cue).
   function strikeFlash() {
+    if (destroyed) return;
     if (prefersReducedMotion()) return; // suppressed animation would strand .is-strike + leak the listener
-    restartClass(svgEl, "is-strike");
+    restartClassTracked(svgEl, "is-strike");
     // animationend BUBBLES: a node/edge child's own animation must not strip
     // .is-strike early, so match e.target and unbind by hand (not {once}, which a
     // bubbled child event would consume).
@@ -512,9 +568,21 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
   // Cancel any in-flight win-cascade timers — called before a rebuild / on
   // teardown so late pulses don't fire against the next board's nodes.
   function destroy() {
+    if (destroyed) return;
+    destroyed = true;
+    tapTimers.forEach(clearTimeout);
+    tapTimers = [];
     clearIllegalExplanation();
-    cascadeTimers.forEach(clearTimeout);
+    cascadeTimers.forEach(clearScheduledTimeout);
     cascadeTimers = [];
+    for (const id of pendingTimeouts) clearScheduledTimeout(id);
+    for (const id of pendingFrames) clearScheduledFrame(id);
+    pendingTimeouts.clear();
+    pendingFrames.clear();
+    clearWin();
+    svgEl.classList.remove("is-strike");
+    for (const view of edgeViews.values()) view.group.classList.remove("is-shaking", "is-legal", "is-illegal-edge");
+    for (const view of nodeViews.values()) view.group.classList.remove("is-pulsing", "is-win-pulsing", "is-illegal-receiver", "is-tight");
   }
 
   return { update, markLegal, shakeEdge, pulseNode: pulse, explainIllegal, winCascade, clearWin, strikeFlash, destroy };
