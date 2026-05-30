@@ -87,6 +87,22 @@ function fakeLocalStorage() {
   };
 }
 
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function collect(root, predicate, found = []) {
+  if (root && predicate(root)) found.push(root);
+  for (const child of root?.children || []) collect(child, predicate, found);
+  return found;
+}
+
+function firstPlayableBattleHit(board) {
+  const legalGroups = collect(board, (node) => node.dataset?.edge && node.classList?.contains("is-legal"));
+  const group = legalGroups.find((node) => !node.classList.contains("is-target")) || legalGroups[0];
+  return group ? group.children[group.children.length - 1] : null;
+}
+
 function installEnv() {
   elements.clear();
   const ids = [
@@ -96,7 +112,7 @@ function installEnv() {
     "battle-turn", "battle-status", "battle-result", "board", "rush-score", "rush-strikes",
     "rush-moves", "btn-skip", "btn-rush-abandon", "rush-toast", "move-count", "par-display", "result-card",
     "result-moves", "result-par", "result-stars", "result-score", "result-pb", "result-hash",
-    "btn-share", "btn-undo", "btn-reset", "btn-tutorial-menu", "rush-final-score", "rush-best", "rush-stats",
+    "btn-share", "btn-undo", "btn-rush-undo", "btn-reset", "btn-tutorial-menu", "rush-final-score", "rush-best", "rush-stats",
     "btn-rush-again", "btn-rush-share", "btn-rush-menu", "battle-result-message", "btn-battle-again", "btn-battle-menu", "btn-battle-abandon"
   ];
   for (const id of ids) elements.set(id, fakeEl(id));
@@ -141,6 +157,7 @@ function installEnv() {
 test("main: mode menu is the hub and launches Tutorial, Rush, and Battle paths", async () => {
   const env = installEnv();
   try {
+    env.storage.setItem("the-lock:intro-seen", "1");
     const { TUTORIALS } = await import("../src/levels.js");
     await import(`../src/main.js?mode-hub-${Date.now()}`);
 
@@ -175,9 +192,26 @@ test("main: mode menu is the hub and launches Tutorial, Rush, and Battle paths",
   }
 });
 
+test("main: first boot shows only the intro dialog, then opens mode selection", async () => {
+  const env = installEnv();
+  try {
+    await import(`../src/main.js?first-boot-${Date.now()}`);
+
+    assert.equal(env.el("intro").classList.contains("hidden"), false, "intro is visible on first boot");
+    assert.equal(env.el("mode-select").classList.contains("hidden"), true, "mode select stays hidden behind the intro");
+
+    env.el("btn-start").click();
+    assert.equal(env.el("intro").classList.contains("hidden"), true, "intro closes after Choose mode");
+    assert.equal(env.el("mode-select").classList.contains("hidden"), false, "mode select opens after intro dismissal");
+  } finally {
+    env.restore();
+  }
+});
+
 test("main: help button routes to Battle rules and preserves other help flows", async () => {
   const env = installEnv();
   try {
+    env.storage.setItem("the-lock:intro-seen", "1");
     await import(`../src/main.js?battle-help-${Date.now()}`);
 
     env.el("btn-start").click();
@@ -207,6 +241,32 @@ test("main: help button routes to Battle rules and preserves other help flows", 
   }
 });
 
+test("main: Battle rules pause a queued Battle vs AI move until closed", async () => {
+  const env = installEnv();
+  try {
+    env.storage.setItem("the-lock:intro-seen", "1");
+    await import(`../src/main.js?battle-help-pause-${Date.now()}`);
+
+    env.el("battle-ai-mode-button").click();
+    const humanMove = firstPlayableBattleHit(env.el("battle-board"));
+    assert.ok(humanMove, "Battle vs AI starts with a playable White move");
+    humanMove.click();
+    assert.equal(env.el("battle-turn").textContent, "Black", "White move queues Black AI turn");
+
+    env.el("btn-help").click();
+    assert.equal(env.el("battle-intro").classList.contains("hidden"), false, "Battle rules open over the queued AI turn");
+    await delay(700);
+
+    assert.equal(env.el("battle-turn").textContent, "Black", "Black AI turn does not advance while rules are open");
+
+    env.el("btn-battle-close").click();
+    await delay(700);
+    assert.notEqual(env.el("battle-status").textContent, "Black Thinking...", "closing rules lets the queued AI turn resolve");
+  } finally {
+    env.restore();
+  }
+});
+
 test("index: Battle rules copy covers the required short rules", async () => {
   const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
 
@@ -230,9 +290,18 @@ test("index: mode menu and active play surfaces expose Task 25 controls", async 
   assert.match(html, /id="btn-battle-abandon"/);
 });
 
+test("index: DOM ids are unique so mode-specific controls bind correctly", async () => {
+  const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]);
+  const duplicates = ids.filter((id, index) => ids.indexOf(id) !== index);
+
+  assert.deepEqual(duplicates, [], "duplicate ids break document/querySelector control binding");
+});
+
 test("main: post-game action buttons can replay or return to mode selection", async () => {
   const env = installEnv();
   try {
+    env.storage.setItem("the-lock:intro-seen", "1");
     await import(`../src/main.js?post-game-actions-${Date.now()}`);
 
     env.el("rush-mode-button").click();
@@ -258,6 +327,7 @@ test("main: post-game action buttons can replay or return to mode selection", as
 test("main: active Main Menu controls abandon Tutorial, Rush, and Battle without terminal overlays", async () => {
   const env = installEnv();
   try {
+    env.storage.setItem("the-lock:intro-seen", "1");
     const { TUTORIALS } = await import("../src/levels.js");
     await import(`../src/main.js?active-abandon-${Date.now()}`);
 

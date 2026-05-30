@@ -242,10 +242,12 @@ if (btnRushStart) btnRushStart.addEventListener("click", () => {
 function showBattleRules() {
   clearHandoff();
   hideResultCard();
+  if (battle) battle.pause();
   if (battleIntro) battleIntro.classList.remove("hidden");
 }
 if (btnBattleClose) btnBattleClose.addEventListener("click", () => {
   if (battleIntro) battleIntro.classList.add("hidden");
+  if (battle) battle.resume();
 });
 
 // ── Nav wiring ──────────────────────────────────────────────────────────────
@@ -304,7 +306,16 @@ if (btnHelp) btnHelp.addEventListener("click", () => {
   else if (mountEl.classList.contains("mode-battle")) showBattleRules();
   else showIntro();
 });
-try { if (localStorage.getItem(STORAGE_INTRO_SEEN)) hideIntro(); } catch (_) {}
+function bootInitialScreen() {
+  let introSeen = false;
+  try { introSeen = Boolean(localStorage.getItem(STORAGE_INTRO_SEEN)); } catch (_) {}
+  if (introSeen) {
+    hideIntro();
+    showModeSelect();
+  } else {
+    hideModeSelect();
+  }
+}
 
 export function showServiceWorkerUpdateAvailable(doc = globalThis.document) {
   const root = doc?.body || doc?.getElementById?.("app");
@@ -342,5 +353,5 @@ export async function registerServiceWorker(nav = globalThis.navigator, doc = gl
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
-showModeSelect();
+bootInitialScreen();
 registerServiceWorker();
