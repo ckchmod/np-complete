@@ -24,7 +24,10 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 const NODE_R = 3.2; // node ring radius
 const ARROW_MAX_LEN = 4.8; // longest arrowhead (thick) — for viewBox padding
 const ENDPOINT_GAP = NODE_R + 0.8; // stop strokes short of the node ring
-const BOW_STEP = 13; // perpendicular control-point offset between parallels
+const BOW_STEP = 18; // perpendicular control-point offset between parallels
+const MAX_BOW_SPAN_RATIO = 0.7;
+const CURVE_LENGTH_SAMPLES = 24;
+const MIN_VISIBLE_SHAFT = 1.6;
 const REVERSAL_MS = 300; // arrow reversal animation duration
 const ILLEGAL_EXPLAIN_MS = 2000;
 const CHARGE_BADGE_R = 3.1;
@@ -95,36 +98,80 @@ function qTangent(c, t) {
   );
 }
 
+function qDerivative(c, t) {
+  return [
+    2 * (1 - t) * (c.cx - c.ax) + 2 * t * (c.bx - c.cx),
+    2 * (1 - t) * (c.cy - c.ay) + 2 * t * (c.by - c.cy),
+  ];
+}
+
+function curveLength(c, fromT = 0, toT = 1) {
+  if (fromT === toT) return 0;
+  let total = 0;
+  let [px, py] = qPoint(c, fromT);
+  for (let i = 1; i <= CURVE_LENGTH_SAMPLES; i++) {
+    const t = fromT + ((toT - fromT) * i) / CURVE_LENGTH_SAMPLES;
+    const [x, y] = qPoint(c, t);
+    total += Math.hypot(x - px, y - py);
+    px = x; py = y;
+  }
+  return total;
+}
+
+function tAtDistance(c, distance) {
+  const total = curveLength(c);
+  if (distance <= 0) return 0;
+  if (distance >= total) return 1;
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 12; i++) {
+    const mid = (lo + hi) / 2;
+    if (curveLength(c, 0, mid) < distance) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+function curveTrim(c) {
+  const total = curveLength(c);
+  const gap = Math.min(ENDPOINT_GAP, Math.max(0, (total - MIN_VISIBLE_SHAFT) / 2));
+  return {
+    total,
+    gap,
+    startT: tAtDistance(c, gap),
+    endT: tAtDistance(c, total - gap),
+  };
+}
+
+function subCurvePath(c, fromT, toT) {
+  const [sx, sy] = qPoint(c, fromT);
+  const [ex, ey] = qPoint(c, toT);
+  const [dx, dy] = qDerivative(c, fromT);
+  const span = (toT - fromT) / 2;
+  return `M ${sx} ${sy} Q ${sx + dx * span} ${sy + dy * span} ${ex} ${ey}`;
+}
+
 function chargeBadgePoint(c) {
   const [x, y] = qPoint(c, 0.5);
   const [tx, ty] = qTangent(c, 0.5);
   return { x: x - ty * CHARGE_BADGE_OFFSET, y: y + tx * CHARGE_BADGE_OFFSET };
 }
 
-function trimmedEnds(c) {
-  const [t0x, t0y] = qTangent(c, 0);
-  const [t1x, t1y] = qTangent(c, 1);
-  return {
-    sx: c.ax + t0x * ENDPOINT_GAP, sy: c.ay + t0y * ENDPOINT_GAP,
-    ex: c.bx - t1x * ENDPOINT_GAP, ey: c.by - t1y * ENDPOINT_GAP,
-  };
-}
-
-// Full curve (used for the hit area and mid-animation).
+// Trimmed curve locus, used for the hit area and mid-animation.
 function curvePath(c) {
-  const e = trimmedEnds(c);
-  return `M ${e.sx} ${e.sy} Q ${c.cx} ${c.cy} ${e.ex} ${e.ey}`;
+  const trim = curveTrim(c);
+  return subCurvePath(c, trim.startT, trim.endT);
 }
 
 // Visible line, pulled back at the HEAD end by the arrowhead length `len`.
 function linePath(c, headEnd, len) {
-  const e = trimmedEnds(c);
+  const trim = curveTrim(c);
+  const tip = headEnd === "B" ? trim.total - trim.gap : trim.gap;
+  const shaftRoom = trim.total - trim.gap * 2;
+  const headPullback = Math.min(len, shaftRoom);
   if (headEnd === "B") {
-    const [dx, dy] = qTangent(c, 1);
-    return `M ${e.sx} ${e.sy} Q ${c.cx} ${c.cy} ${e.ex - dx * len} ${e.ey - dy * len}`;
+    return subCurvePath(c, trim.startT, tAtDistance(c, tip - headPullback));
   }
-  const [tx, ty] = qTangent(c, 0);
-  return `M ${e.ex} ${e.ey} Q ${c.cx} ${c.cy} ${e.sx + tx * len} ${e.sy + ty * len}`;
+  return subCurvePath(c, trim.endT, tAtDistance(c, tip + headPullback));
 }
 
 function arrowTriangle(tipX, tipY, dx, dy, len, half) {
@@ -140,13 +187,16 @@ function arrowTriangle(tipX, tipY, dx, dy, len, half) {
 }
 
 function arrowPathFor(c, headEnd, len, half) {
-  const e = trimmedEnds(c);
+  const trim = curveTrim(c);
+  const tipT = headEnd === "B" ? trim.endT : trim.startT;
   if (headEnd === "B") {
-    const [dx, dy] = qTangent(c, 1);
-    return arrowTriangle(e.ex, e.ey, dx, dy, len, half);
+    const [tipX, tipY] = qPoint(c, tipT);
+    const [dx, dy] = qTangent(c, tipT);
+    return arrowTriangle(tipX, tipY, dx, dy, len, half);
   }
-  const [tx, ty] = qTangent(c, 0);
-  return arrowTriangle(e.sx, e.sy, -tx, -ty, len, half);
+  const [tipX, tipY] = qPoint(c, tipT);
+  const [tx, ty] = qTangent(c, tipT);
+  return arrowTriangle(tipX, tipY, -tx, -ty, len, half);
 }
 
 function arrowPathAtT(c, t, dirSign, len, half) {
@@ -155,14 +205,20 @@ function arrowPathAtT(c, t, dirSign, len, half) {
   return arrowTriangle(tipX, tipY, tx * dirSign, ty * dirSign, len, half);
 }
 
-function parallelBow(level, edge) {
+function parallelBow(level, nodeById, edge) {
   const key = (e) => (e.u < e.v ? e.u + "|" + e.v : e.v + "|" + e.u);
   const k = key(edge);
   const group = level.edges.filter((e) => key(e) === k);
   if (group.length < 2) return 0;
   const i = group.findIndex((e) => e.id === edge.id);
   const mid = (group.length - 1) / 2;
-  return (i - mid) * BOW_STEP;
+  const rawBow = (i - mid) * BOW_STEP;
+  const maxRawBow = Math.abs(mid * BOW_STEP) || BOW_STEP;
+  const A = nodeById.get(edge.u);
+  const B = nodeById.get(edge.v);
+  const span = Math.hypot(B.x - A.x, B.y - A.y);
+  const cap = span * MAX_BOW_SPAN_RATIO;
+  return rawBow * Math.min(1, cap / maxRawBow);
 }
 
 function headEnd(ends, edge) {
@@ -289,7 +345,7 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
 
   // --- Build edges -----------------------------------------------------------
   for (const edge of config.level.edges) {
-    const curve = edgeCurve(nodeById, edge, parallelBow(config.level, edge));
+    const curve = edgeCurve(nodeById, edge, parallelBow(config.level, nodeById, edge));
     const dim = arrowDims(edge.w);
     const toEnd = headEnd(edgeEnds(current, edge.id), edge);
 
@@ -410,12 +466,13 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
   function animateReversal(view, prevEnds, nextEnds) {
     const c = view.curve;
     const { len, half } = view.dim;
-    const fromT = headEnd(prevEnds, view.edge) === "B" ? 1 : 0;
-    const toT = headEnd(nextEnds, view.edge) === "B" ? 1 : 0;
+    const trim = curveTrim(c);
+    const fromT = headEnd(prevEnds, view.edge) === "B" ? trim.endT : trim.startT;
+    const nextHead = headEnd(nextEnds, view.edge);
+    const toT = nextHead === "B" ? trim.endT : trim.startT;
     if (prefersReducedMotion()) { // snap to the final orientation, no glide
-      const head = toT === 1 ? "B" : "A";
-      view.arrow.setAttribute("d", arrowPathFor(c, head, len, half));
-      view.line.setAttribute("d", linePath(c, head, len));
+      view.arrow.setAttribute("d", arrowPathFor(c, nextHead, len, half));
+      view.line.setAttribute("d", linePath(c, nextHead, len));
       return;
     }
     const dirSign = toT > fromT ? 1 : -1;
@@ -428,9 +485,8 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
       view.arrow.setAttribute("d", arrowPathAtT(c, fromT + (toT - fromT) * e, dirSign, len, half));
       if (k < 1) scheduleFrame(frame);
       else {
-        const head = toT === 1 ? "B" : "A";
-        view.arrow.setAttribute("d", arrowPathFor(c, head, len, half));
-        view.line.setAttribute("d", linePath(c, head, len));
+        view.arrow.setAttribute("d", arrowPathFor(c, nextHead, len, half));
+        view.line.setAttribute("d", linePath(c, nextHead, len));
       }
     }
     scheduleFrame(frame);
