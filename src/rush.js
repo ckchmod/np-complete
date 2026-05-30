@@ -46,7 +46,7 @@ export function createRush({ mountEl, seed, onGameOver, levelFactory = generateL
   const strikesEl = mountEl.querySelector("#rush-strikes");
   const movesEl = mountEl.querySelector("#rush-moves");
   const btnSkip = mountEl.querySelector("#btn-skip");
-  const btnUndo = mountEl.querySelector("#btn-undo");
+  const btnUndo = mountEl.querySelector("#btn-rush-undo");
   const toastEl = mountEl.querySelector("#rush-toast");
 
   const rng = makeRng(seed >>> 0);

@@ -172,7 +172,7 @@ function buildRushFixture() {
     ["#rush-score", score],
     ["#rush-strikes", strikes],
     ["#rush-moves", moves],
-    ["#btn-undo", undo],
+    ["#btn-rush-undo", undo],
     ["#btn-skip", skip],
     ["#rush-toast", toast],
   ]);
