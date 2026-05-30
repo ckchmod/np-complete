@@ -1,5 +1,5 @@
 // THE LOCK — game session logic.
-// createGame({ level, mountEl, onWin }) -> Game { undo(), reset(), shareResult() }
+// createGame({ level, mountEl, onWin, onReplayStart }) -> Game { undo(), reset(), shareResult() }
 
 import {
   makeConfig,
@@ -10,6 +10,7 @@ import {
   legalFlips,
 } from "./engine.js";
 import { createBoard } from "./render.js";
+import { createReplayUI } from "./replayUI.js";
 
 // ── Persistence helpers ───────────────────────────────────────────────────────
 
@@ -136,7 +137,7 @@ function fmt(ms) {
 
 // ── createGame ────────────────────────────────────────────────────────────────
 
-export function createGame({ level, mountEl, onWin }) {
+export function createGame({ level, mountEl, onWin, onReplayStart }) {
   // Elements expected in mountEl (provided by index.html / main.js):
   // - svg#board
   // - #move-count, #par-display
@@ -158,6 +159,7 @@ export function createGame({ level, mountEl, onWin }) {
   const btnShare = qs(mountEl, "#btn-share");
   const btnUndo = qs(mountEl, "#btn-undo");
   const btnReset = qs(mountEl, "#btn-reset");
+  const replayMount = qs(mountEl, "#replay-ui");
 
   // State
   const startConfig = makeConfig(level);
@@ -170,6 +172,7 @@ export function createGame({ level, mountEl, onWin }) {
   let destroyed = false; // set by destroy(); deferred callbacks bail if true
   let winTimer = null;   // the 900ms result-card timer, cleared on destroy
   let finalShareString = "";
+  let replayUI = null;
 
   // Total moves counted toward the solve = moves restored on resume + this
   // session's moves. The path hash only ever hashes this session's ids, so it
@@ -205,6 +208,24 @@ export function createGame({ level, mountEl, onWin }) {
 
   // Build the board renderer
   const board = createBoard(svgEl, config, { onEdgeTap: handleTap });
+
+  if (replayMount && typeof document.createElement === "function") {
+    replayUI = createReplayUI({
+      mountEl: replayMount,
+      onReplayStart: () => {
+        if (onReplayStart) onReplayStart();
+        config = startConfig;
+        board.clearWin();
+        board.update(config);
+        board.markLegal(legalFlips(config));
+      },
+      onFrame(frame) {
+        config = frame.config;
+        board.update(config);
+        board.markLegal(legalFlips(config));
+      },
+    });
+  }
 
   // Show current legal edges
   refreshLegal();
@@ -292,6 +313,16 @@ export function createGame({ level, mountEl, onWin }) {
         resultCard.classList.remove("hidden");
         resultCard.classList.add("visible");
       }
+      if (replayUI) {
+        replayUI.show({
+          frames: replayFrames(moveHistory),
+          analysis: {
+            moveCount: moves,
+            par: level.par,
+            targetLegalMoment: targetLegalMoment(moveHistory),
+          },
+        });
+      }
       if (onWin) onWin({ moves, score, stars, hash });
     }, 900);
   }
@@ -318,6 +349,7 @@ export function createGame({ level, mountEl, onWin }) {
         resultCard.classList.remove("visible");
         resultCard.classList.add("hidden");
       }
+      if (replayUI) replayUI.hide();
       won = false;
     }
     moveHistory = [];
@@ -360,11 +392,36 @@ export function createGame({ level, mountEl, onWin }) {
     return finalShareString;
   }
 
+  function replayFrames(edgeIds) {
+    let replayConfig = startConfig;
+    return edgeIds.map((edgeId, moveIndex) => {
+      replayConfig = applyFlip(replayConfig, edgeId);
+      return {
+        config: replayConfig,
+        moveIndex,
+        moveId: edgeId,
+        isLast: moveIndex === edgeIds.length - 1,
+      };
+    });
+  }
+
+  function targetLegalMoment(edgeIds) {
+    let replayConfig = startConfig;
+    if (isLegalFlip(replayConfig, level.target)) return 0;
+    for (let i = 0; i < edgeIds.length; i++) {
+      if (edgeIds[i] === level.target && isLegalFlip(replayConfig, level.target)) return i;
+      replayConfig = applyFlip(replayConfig, edgeIds[i]);
+      if (i < edgeIds.length - 1 && isLegalFlip(replayConfig, level.target)) return i + 1;
+    }
+    return null;
+  }
+
   // Remove this session's listeners on the persistent control buttons so they
   // don't accumulate across level changes (main.js calls this before reloading).
   function destroy() {
     destroyed = true;
     if (winTimer) { clearTimeout(winTimer); winTimer = null; }
+    if (replayUI) { replayUI.destroy(); replayUI = null; }
     if (board && board.destroy) board.destroy();
     if (btnUndo) btnUndo.removeEventListener("click", undo);
     if (btnReset) btnReset.removeEventListener("click", reset);
