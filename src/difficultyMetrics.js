@@ -198,6 +198,59 @@ export function cycleRank(level) {
   return level.edges.length - level.nodes.length + connectedComponents;
 }
 
+export function articulationAndBridges(level) {
+  const neighborsByNode = new Map(level.nodes.map((node) => [node.id, []]));
+  for (const edge of level.edges) {
+    neighborsByNode.get(edge.u).push({ to: edge.v, edgeId: edge.id });
+    neighborsByNode.get(edge.v).push({ to: edge.u, edgeId: edge.id });
+  }
+
+  const discoveredAt = new Map();
+  const low = new Map();
+  const articulationPoints = new Set();
+  let bridgeCount = 0;
+  let time = 0;
+
+  function visit(nodeId, parentEdgeId) {
+    discoveredAt.set(nodeId, time);
+    low.set(nodeId, time);
+    time++;
+
+    let childCount = 0;
+    for (const neighbor of neighborsByNode.get(nodeId)) {
+      if (neighbor.edgeId === parentEdgeId) continue;
+
+      if (!discoveredAt.has(neighbor.to)) {
+        childCount++;
+        visit(neighbor.to, neighbor.edgeId);
+        low.set(nodeId, Math.min(low.get(nodeId), low.get(neighbor.to)));
+
+        if (parentEdgeId !== null && low.get(neighbor.to) >= discoveredAt.get(nodeId)) {
+          articulationPoints.add(nodeId);
+        }
+        if (low.get(neighbor.to) > discoveredAt.get(nodeId)) {
+          bridgeCount++;
+        }
+      } else {
+        low.set(nodeId, Math.min(low.get(nodeId), discoveredAt.get(neighbor.to)));
+      }
+    }
+
+    if (parentEdgeId === null && childCount >= 2) {
+      articulationPoints.add(nodeId);
+    }
+  }
+
+  for (const node of level.nodes) {
+    if (!discoveredAt.has(node.id)) visit(node.id, null);
+  }
+
+  return {
+    articulationCount: articulationPoints.size,
+    bridgeCount,
+  };
+}
+
 export function targetSlack(config, targetEdge = config.level.target) {
   const edge = typeof targetEdge === "string"
     ? config.edgeById.get(targetEdge)
@@ -316,5 +369,6 @@ export function allMetrics(level, { cap = STATE_CAP } = {}) {
     ...coreMetrics(traversal, analysis),
     ...computeAdvancedMetrics(traversal, analysis),
     cycleRank: cycleRank(level),
+    ...articulationAndBridges(level),
   };
 }

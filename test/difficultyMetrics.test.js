@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { THE_LOCK, TUTORIALS } from "../src/levels.js";
 import { makeConfig } from "../src/engine.js";
-import { allMetrics, basicMetrics, cycleRank, isNonmonotonic, targetSlack } from "../src/difficultyMetrics.js";
+import { allMetrics, articulationAndBridges, basicMetrics, cycleRank, isNonmonotonic, targetSlack } from "../src/difficultyMetrics.js";
 
 const SIMPLE_CHAIN = TUTORIALS[2];
 const SHUTTLE = TUTORIALS[5];
@@ -13,6 +13,15 @@ const TREE_TOPOLOGY = {
     { id: "ab", u: "a", v: "b" },
     { id: "bc", u: "b", v: "c" },
     { id: "bd", u: "b", v: "d" },
+  ],
+};
+const CYCLE_TOPOLOGY = {
+  nodes: [{ id: "a" }, { id: "b" }, { id: "c" }, { id: "d" }],
+  edges: [
+    { id: "ab", u: "a", v: "b" },
+    { id: "bc", u: "b", v: "c" },
+    { id: "cd", u: "c", v: "d" },
+    { id: "da", u: "d", v: "a" },
   ],
 };
 
@@ -62,6 +71,10 @@ test("allMetrics preserves core THE_LOCK metrics and reports advanced difficulty
   assert.equal(metrics.resourceContention, 1);
   assert.equal(metrics.nonmonotonicity, true);
   assert.ok(metrics.cycleRank > 0);
+  assert.deepEqual(
+    { articulationCount: metrics.articulationCount, bridgeCount: metrics.bridgeCount },
+    articulationAndBridges(THE_LOCK),
+  );
 });
 
 test("shuttle tutorial has mandatory repeated flips and nonmonotonic target slack", () => {
@@ -86,6 +99,32 @@ test("simple slack chain has no mandatory repeat or nonmonotonic move", () => {
 test("cycleRank distinguishes tree-like and cyclic board topology", () => {
   assert.equal(cycleRank(TREE_TOPOLOGY), 0);
   assert.ok(cycleRank(THE_LOCK) > 0);
+});
+
+test("articulationAndBridges counts cut vertices and cut edges in a tree", () => {
+  assert.equal(typeof articulationAndBridges, "function");
+  assert.deepEqual(articulationAndBridges(TREE_TOPOLOGY), {
+    articulationCount: 1,
+    bridgeCount: 3,
+  });
+});
+
+test("articulationAndBridges reports no bottlenecks for a single cycle", () => {
+  assert.deepEqual(articulationAndBridges(CYCLE_TOPOLOGY), {
+    articulationCount: 0,
+    bridgeCount: 0,
+  });
+});
+
+test("allMetrics includes articulation and bridge counts without changing basicMetrics", () => {
+  const metrics = allMetrics(THE_LOCK);
+
+  assert.deepEqual(
+    { articulationCount: metrics.articulationCount, bridgeCount: metrics.bridgeCount },
+    articulationAndBridges(THE_LOCK),
+  );
+  assert.equal(Object.hasOwn(basicMetrics(THE_LOCK), "articulationCount"), false);
+  assert.equal(Object.hasOwn(basicMetrics(THE_LOCK), "bridgeCount"), false);
 });
 
 test("allMetrics includes cycleRank without changing basicMetrics", () => {
