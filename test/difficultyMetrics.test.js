@@ -69,6 +69,7 @@ test("allMetrics preserves core THE_LOCK metrics and reports advanced difficulty
   assert.ok(metrics.bottleneckCount >= 1);
   assert.equal(metrics.mandatoryRepeatedFlips, true);
   assert.equal(metrics.resourceContention, 1);
+  assert.ok(metrics.contentionScore > 0);
   assert.equal(metrics.nonmonotonicity, true);
   assert.ok(metrics.cycleRank > 0);
   assert.deepEqual(
@@ -94,6 +95,16 @@ test("simple slack chain has no mandatory repeat or nonmonotonic move", () => {
   assert.equal(metrics.mandatoryRepeatedFlips, false);
   assert.equal(metrics.nonmonotonicity, false);
   assert.equal(metrics.resourceContention, 0);
+  assert.equal(metrics.shortestPathCount, 1);
+  assert.equal(metrics.contentionScore, 2);
+});
+
+test("OR choice has no edge shared by every shortest path", () => {
+  const metrics = allMetrics(TUTORIALS[4]);
+
+  assert.equal(metrics.par, 2);
+  assert.equal(metrics.shortestPathCount, 2);
+  assert.equal(metrics.contentionScore, 0);
 });
 
 test("cycleRank distinguishes tree-like and cyclic board topology", () => {
@@ -134,6 +145,13 @@ test("allMetrics includes cycleRank without changing basicMetrics", () => {
   assert.equal(Object.hasOwn(basicMetrics(THE_LOCK), "cycleRank"), false);
 });
 
+test("allMetrics includes contentionScore without changing basicMetrics", () => {
+  const metrics = allMetrics(THE_LOCK);
+
+  assert.equal(typeof metrics.contentionScore, "number");
+  assert.equal(Object.hasOwn(basicMetrics(THE_LOCK), "contentionScore"), false);
+});
+
 test("targetSlack reads slack at the target edge receiver", () => {
   assert.equal(targetSlack(makeConfig(TUTORIALS[2])), 1);
   assert.equal(targetSlack(makeConfig(TUTORIALS[5])), 1);
@@ -155,4 +173,5 @@ test("allMetrics marks advanced metrics conservative when capped", () => {
   assert.equal(metrics.nonmonotonicity, false);
   assert.equal(metrics.bottleneckCount, 0);
   assert.equal(metrics.resourceContention, 0);
+  assert.equal(metrics.contentionScore, null);
 });

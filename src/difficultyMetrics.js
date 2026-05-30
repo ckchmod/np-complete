@@ -281,6 +281,7 @@ function computeAdvancedMetrics(traversal, analysis) {
       bottleneckCount: 0,
       mandatoryRepeatedFlips: false,
       resourceContention: 0,
+      contentionScore: null,
       nonmonotonicity: false,
     };
   }
@@ -295,6 +296,7 @@ function computeAdvancedMetrics(traversal, analysis) {
   }
 
   let resourceContention = 0;
+  const criticalEdgeIds = new Set();
   const cleanReachable = new Set([0]);
   const byDistance = [...states.keys()].sort((a, b) => states[a].dist - states[b].dist);
 
@@ -305,6 +307,10 @@ function computeAdvancedMetrics(traversal, analysis) {
     const slack = targetSlack(states[index].config);
     let hasNonDecreasingMove = false;
     for (const move of moves) {
+      if (waysFromStart[index] * waysToGoal[move.to] === totalPaths) {
+        criticalEdgeIds.add(move.edgeId);
+      }
+
       const nextSlack = targetSlack(states[move.to].config);
       if (goalSet.has(move.to) || nextSlack >= slack) {
         hasNonDecreasingMove = true;
@@ -321,6 +327,7 @@ function computeAdvancedMetrics(traversal, analysis) {
     bottleneckCount,
     mandatoryRepeatedFlips: par > edgeIdsInShortestDag.size,
     resourceContention,
+    contentionScore: criticalEdgeIds.size,
     nonmonotonicity: !hasMonotoneShortestPath,
   };
 }
