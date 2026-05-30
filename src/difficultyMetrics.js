@@ -243,10 +243,25 @@ function computeAdvancedMetrics(traversal, analysis) {
   };
 }
 
-export function basicMetrics(level, { cap = STATE_CAP } = {}) {
-  const traversal = buildTraversal(level, cap);
-  const goalCount = traversal.shortestGoalDepth === null ? 0 : 1;
-  const shortestPathCount = goalCount;
+function countSolvedStates(traversal) {
+  if (traversal.partial) return null;
+  let goalCount = 0;
+  for (const state of traversal.states) {
+    if (isSolved(state.config)) goalCount++;
+  }
+  return goalCount;
+}
+
+function exactCountMetric(count) {
+  if (count <= BigInt(Number.MAX_SAFE_INTEGER)) return Number(count);
+  return count.toString();
+}
+
+function coreMetrics(traversal, analysis) {
+  const goalCount = countSolvedStates(traversal);
+  const shortestPathCount = traversal.partial || analysis.par === null || analysis.totalPaths === 0n
+    ? null
+    : exactCountMetric(analysis.totalPaths);
 
   return {
     reachableCount: traversal.states.length,
@@ -260,22 +275,16 @@ export function basicMetrics(level, { cap = STATE_CAP } = {}) {
   };
 }
 
+export function basicMetrics(level, { cap = STATE_CAP } = {}) {
+  const traversal = buildTraversal(level, cap);
+  return coreMetrics(traversal, shortestPathAnalysis(traversal));
+}
+
 export function allMetrics(level, { cap = STATE_CAP } = {}) {
   const traversal = buildTraversal(level, cap);
-  const base = {
-    reachableCount: traversal.states.length,
-    diameter: traversal.diameter,
-    branchingFactor: traversal.states.length === 0 ? 0 : traversal.totalBranching / traversal.states.length,
-    goalCount: traversal.shortestGoalDepth === null ? 0 : 1,
-    shortestPathCount: traversal.shortestGoalDepth === null ? 0 : 1,
-    deadEndCount: traversal.deadEndCount,
-    par: traversal.shortestGoalDepth,
-    partial: traversal.partial,
-  };
-
   const analysis = shortestPathAnalysis(traversal);
   return {
-    ...base,
+    ...coreMetrics(traversal, analysis),
     ...computeAdvancedMetrics(traversal, analysis),
   };
 }

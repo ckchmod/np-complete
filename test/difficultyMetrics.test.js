@@ -15,10 +15,19 @@ test("basicMetrics returns the expected core metrics for THE_LOCK", () => {
   assert.equal(metrics.diameter, 27);
   assert.ok(metrics.diameter >= 16);
   assert.ok(metrics.branchingFactor >= 1.0);
-  assert.equal(metrics.goalCount, 1);
-  assert.equal(metrics.shortestPathCount, 1);
+  assert.equal(metrics.goalCount, 28);
+  assert.equal(metrics.shortestPathCount, 264);
   assert.equal(metrics.deadEndCount, 0);
   assert.equal(metrics.par, 16);
+  assert.equal(metrics.partial, false);
+});
+
+test("basicMetrics counts all solved states and distinct shortest paths", () => {
+  const metrics = basicMetrics(TUTORIALS[4]);
+
+  assert.equal(metrics.goalCount, 96);
+  assert.equal(metrics.shortestPathCount, 2);
+  assert.equal(metrics.par, 2);
   assert.equal(metrics.partial, false);
 });
 
@@ -27,8 +36,8 @@ test("basicMetrics marks traversal as partial when capped", () => {
 
   assert.equal(metrics.partial, true);
   assert.equal(metrics.par, null);
-  assert.equal(metrics.shortestPathCount, 0);
-  assert.equal(metrics.goalCount, 0);
+  assert.equal(metrics.shortestPathCount, null);
+  assert.equal(metrics.goalCount, null);
   assert.ok(metrics.reachableCount < 92);
 });
 
@@ -36,8 +45,8 @@ test("allMetrics preserves core THE_LOCK metrics and reports advanced difficulty
   const metrics = allMetrics(THE_LOCK);
 
   assert.equal(metrics.reachableCount, 92);
-  assert.equal(metrics.goalCount, 1);
-  assert.equal(metrics.shortestPathCount, 1);
+  assert.equal(metrics.goalCount, 28);
+  assert.equal(metrics.shortestPathCount, 264);
   assert.equal(metrics.par, 16);
   assert.equal(metrics.partial, false);
   assert.ok(metrics.bottleneckCount >= 1);
@@ -80,6 +89,8 @@ test("allMetrics marks advanced metrics conservative when capped", () => {
 
   assert.equal(metrics.partial, true);
   assert.equal(metrics.par, null);
+  assert.equal(metrics.goalCount, null);
+  assert.equal(metrics.shortestPathCount, null);
   assert.equal(metrics.mandatoryRepeatedFlips, false);
   assert.equal(metrics.nonmonotonicity, false);
   assert.equal(metrics.bottleneckCount, 0);
