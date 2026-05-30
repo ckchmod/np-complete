@@ -5,10 +5,15 @@ import {
   isTerminal,
   makeBattleConfig,
 } from "./battleEngine.js";
+import { chooseMove } from "./aiBattle.js";
+import { analyzeBattleReplay, battleMovesFromState } from "./battleReplay.js";
 import { generateBattle } from "./battleGenerator.js";
 import { createBoard } from "./render.js";
+import { createReplayUI } from "./replayUI.js";
 
 const PLAYER_LABELS = Object.freeze({ white: "White", black: "Black" });
+const AI_PLAYER = "black";
+const AI_DELAY_MS = 600;
 
 function qs(root, selector) {
   return root && root.querySelector ? root.querySelector(selector) : null;
@@ -20,6 +25,10 @@ function playerLabel(player) {
 
 function winnerText(winner) {
   return playerLabel(winner) + " Wins!";
+}
+
+function thinkingText(player) {
+  return playerLabel(player) + " Thinking...";
 }
 
 function legalBattleFlips(state) {
@@ -58,15 +67,23 @@ export function createBattle({
   boardFactory = createBoard,
   initialCharges = 3,
   initialTurn = "white",
+  vsAI = false,
+  aiDifficulty,
+  aiDelayMs = AI_DELAY_MS,
+  aiMoveDelayMs,
+  chooseAIMove = chooseMove,
+  aiOptions = {},
   autoStart = false,
   onStateChange,
   onIllegalMove,
   onTerminal,
+  battleReplayOptions = {},
   animationMs = 300,
 } = {}) {
   const svgEl = refs.boardEl || qs(mountEl, "#battle-board") || qs(mountEl, "#board");
   const turnEl = refs.turnEl || qs(mountEl, "#battle-turn");
   const statusEl = refs.statusEl || qs(mountEl, "#battle-status");
+  const replayMount = refs.replayMount || qs(mountEl, "#battle-replay-ui");
 
   let level = null;
   let state = null;
@@ -74,8 +91,18 @@ export function createBattle({
   let terminal = null;
   let destroyed = false;
   let animating = false;
+  let aiThinking = false;
   let feedbackTimer = null;
   let animationTimer = null;
+  let aiTimer = null;
+  let aiTurnToken = 0;
+  let replayUI = null;
+  let currentReplayAnalysis = null;
+  let replayInitialCharges = initialCharges;
+  let replayInitialTurn = initialTurn;
+
+  const effectiveAIDifficulty = aiDifficulty ?? difficulty;
+  const effectiveAIDelayMs = aiMoveDelayMs ?? aiDelayMs;
 
   function emitState() {
     if (onStateChange) onStateChange(snapshot(state));
@@ -90,12 +117,19 @@ export function createBattle({
     setText(statusEl, message);
   }
 
+  function setThinking(next) {
+    aiThinking = next;
+    if (statusEl && statusEl.classList) statusEl.classList.toggle("thinking", next);
+    if (svgEl && svgEl.classList) svgEl.classList.toggle("thinking", next);
+    if (next) showStatus(thinkingText(AI_PLAYER));
+  }
+
   function clearFeedbackSoon() {
     if (!statusEl) return;
     if (feedbackTimer) clearTimeout(feedbackTimer);
     feedbackTimer = setTimeout(() => {
       feedbackTimer = null;
-      if (!destroyed && !terminal) showStatus("");
+      if (!destroyed && !terminal && !aiThinking) showStatus("");
     }, 900);
   }
 
@@ -103,16 +137,70 @@ export function createBattle({
     if (animationTimer) { clearTimeout(animationTimer); animationTimer = null; }
   }
 
+  function clearAiTimer() {
+    aiTurnToken++;
+    if (aiTimer) { clearTimeout(aiTimer); aiTimer = null; }
+    setThinking(false);
+  }
+
+  function isAITurn() {
+    return Boolean(vsAI && state && state.turn === AI_PLAYER && !terminal);
+  }
+
   function refreshLegal() {
-    if (board && state) board.markLegal(legalBattleFlips(state));
+    if (board && state) board.markLegal(aiThinking ? [] : legalBattleFlips(state));
+  }
+
+  function ensureReplayUI() {
+    if (!replayMount || replayUI) return replayUI;
+    replayUI = createReplayUI({
+      mountEl: replayMount,
+      frames: [],
+      analysis: { battle: true },
+      onReplayStart() {
+        if (board && currentReplayAnalysis?.startState) {
+          board.update(currentReplayAnalysis.startState);
+          board.markLegal([]);
+        }
+      },
+      onFrame(frame) {
+        if (board) board.update(frame.config);
+      },
+    });
+    replayUI.hide();
+    return replayUI;
+  }
+
+  function hideReplayUI() {
+    currentReplayAnalysis = null;
+    if (replayUI) replayUI.hide();
+  }
+
+  function showReplayUI() {
+    const ui = ensureReplayUI();
+    if (!ui || !state) return;
+    currentReplayAnalysis = analyzeBattleReplay({
+      level,
+      moves: battleMovesFromState(state),
+      initialCharges: replayInitialCharges,
+      initialTurn: replayInitialTurn,
+      solverOptions: battleReplayOptions,
+    });
+    if (!currentReplayAnalysis) return;
+    ui.show({
+      frames: currentReplayAnalysis.frames,
+      analysis: currentReplayAnalysis,
+    });
   }
 
   function finishTerminal(result) {
+    clearAiTimer();
     terminal = result;
     animating = true;
     if (board) board.markLegal([]);
     showStatus(winnerText(result.winner));
     if (board) board.winCascade();
+    showReplayUI();
     if (onTerminal) onTerminal({ ...result, message: winnerText(result.winner), state: snapshot(state) });
     emitState();
   }
@@ -129,28 +217,18 @@ export function createBattle({
     }
   }
 
-  function rejectMove(edgeId, reason) {
+  function rejectMove(edgeId, reason, message = "Illegal move") {
     if (board && edgeId) {
       board.shakeEdge(edgeId);
       const edge = state && state.edgeById.get(edgeId);
       if (edge) board.pulseNode(state.dirs.get(edgeId) === "uv" ? edge.v : edge.u);
     }
-    showStatus("Illegal move");
-    clearFeedbackSoon();
+    showStatus(message);
+    if (message === "Illegal move") clearFeedbackSoon();
     if (onIllegalMove) onIllegalMove({ edgeId, reason, state: snapshot(state) });
   }
 
-  function handleTap(edgeId) {
-    if (destroyed || !state) return;
-    if (animating || terminal) {
-      rejectMove(edgeId, terminal ? "terminal" : "animating");
-      return;
-    }
-    if (!isLegalBattleFlip(state, edgeId)) {
-      rejectMove(edgeId, "illegal");
-      return;
-    }
-
+  function applyMove(edgeId) {
     state = applyBattleFlip(state, edgeId);
     animating = true;
     if (board) board.update(state);
@@ -166,12 +244,62 @@ export function createBattle({
     }
   }
 
+  function runAiTurn(token) {
+    aiTimer = null;
+    if (destroyed || token !== aiTurnToken || !isAITurn()) return;
+    if (animating) {
+      aiTimer = setTimeout(() => runAiTurn(token), 16);
+      return;
+    }
+
+    const choice = chooseAIMove(state, effectiveAIDifficulty, aiOptions);
+    if (!choice || !isLegalBattleFlip(state, choice.edgeId)) {
+      setThinking(false);
+      checkTerminal();
+      return;
+    }
+
+    setThinking(false);
+    applyMove(choice.edgeId);
+  }
+
+  function scheduleAiTurn() {
+    if (!isAITurn() || destroyed || terminal) return;
+    aiTurnToken++;
+    const token = aiTurnToken;
+    if (aiTimer) { clearTimeout(aiTimer); aiTimer = null; }
+    setThinking(true);
+    if (board) board.markLegal([]);
+    aiTimer = setTimeout(() => runAiTurn(token), effectiveAIDelayMs);
+  }
+
+  function handleTap(edgeId) {
+    if (destroyed || !state) return;
+    if (aiThinking || isAITurn()) {
+      rejectMove(edgeId, "ai-thinking", thinkingText(AI_PLAYER));
+      return;
+    }
+    if (animating || terminal) {
+      rejectMove(edgeId, terminal ? "terminal" : "animating");
+      return;
+    }
+    if (!isLegalBattleFlip(state, edgeId)) {
+      rejectMove(edgeId, "illegal");
+      return;
+    }
+
+    applyMove(edgeId);
+    scheduleAiTurn();
+  }
+
   function start(options = {}) {
     destroyed = false;
     terminal = null;
     animating = false;
+    hideReplayUI();
     if (feedbackTimer) { clearTimeout(feedbackTimer); feedbackTimer = null; }
     clearAnimationTimer();
+    clearAiTimer();
     if (board) board.destroy();
 
     const battleOptions = {
@@ -186,6 +314,8 @@ export function createBattle({
       options.initialCharges ?? initialCharges,
       options.initialTurn ?? initialTurn
     );
+    replayInitialCharges = options.initialCharges ?? initialCharges;
+    replayInitialTurn = options.initialTurn ?? initialTurn;
     if (svgEl) board = boardFactory(svgEl, state, { onEdgeTap: handleTap });
     else board = null;
 
@@ -197,6 +327,7 @@ export function createBattle({
       terminal = null;
       showStatus(hasLegalMoves(state, state.turn) ? "" : winnerText(state.turn === "white" ? "black" : "white"));
       emitState();
+      scheduleAiTurn();
     }
     return snapshot(state);
   }
@@ -206,6 +337,8 @@ export function createBattle({
     animating = true;
     if (feedbackTimer) { clearTimeout(feedbackTimer); feedbackTimer = null; }
     clearAnimationTimer();
+    clearAiTimer();
+    if (replayUI) { replayUI.destroy(); replayUI = null; }
     if (board) { board.destroy(); board = null; }
   }
 
@@ -219,6 +352,7 @@ export function createBattle({
     get state() { return snapshot(state); },
     get level() { return level; },
     get terminal() { return terminal ? { ...terminal } : null; },
+    get isAIThinking() { return aiThinking; },
   };
 }
 
