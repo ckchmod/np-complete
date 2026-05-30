@@ -46,10 +46,12 @@
       <div class="battle-panel" aria-label="Current player">
         <span class="battle-label">Turn</span>
         <span id="battle-turn" class="battle-turn">White</span>
-        <button id="btn-battle-abandon" class="btn btn-ghost abandon-control" type="button" aria-label="Abandon battle and return to main menu">Main Menu</button>
       </div>
       <svg id="battle-board" class="board battle-board" aria-label="battle puzzle board"></svg>
       <p id="battle-status" class="battle-status" aria-live="polite"></p>
+      <div id="battle-controls" class="battle-only">
+        <button id="btn-battle-abandon" class="btn btn-ghost abandon-control" type="button" aria-label="Abandon battle and return to main menu">Main Menu</button>
+      </div>
       <div id="battle-result" class="battle-result hidden" aria-label="Battle result">
         <div id="battle-result-message" role="status" aria-live="polite">—</div>
         <div class="result-actions battle-actions">
@@ -170,7 +172,7 @@
             <span class="mode-title">Tutorial</span>
             <span class="mode-copy">Practice the rule of two with guided locks and scoring.</span>
           </button>
-          <button id="rush-mode-button" class="btn btn-primary mode-choice" type="button">
+          <button id="rush-mode-button" class="btn btn-secondary mode-choice" type="button">
             <span class="mode-kicker">Solo</span>
             <span class="mode-title">Puzzle Rush</span>
             <span class="mode-copy">Pick generated locks before three strikes run out.</span>

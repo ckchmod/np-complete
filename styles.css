@@ -762,6 +762,7 @@ body {
 #rush-hud { align-items: baseline; gap: 6px; }
 #rush-strikes.strikes { color: var(--c-target); letter-spacing: 0.18em; }
 #rush-controls { justify-content: center; gap: var(--space-2); }
+#battle-controls { justify-content: center; flex-shrink: 0; }
 
 .mode-battle .tutorial-only { display: none; }
 .mode-battle #hud,
@@ -772,6 +773,7 @@ body {
 .mode-battle #rush-toast,
 .mode-battle #board-wrap { display: none; }
 .mode-battle #battle-wrap { display: flex; }
+.mode-battle #battle-controls { display: flex; }
 
 .mode-card {
   max-width: var(--mode-card-max);

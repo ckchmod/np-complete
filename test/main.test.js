@@ -192,6 +192,27 @@ test("main: mode menu is the hub and launches Tutorial, Rush, and Battle paths",
   }
 });
 
+test("main: mode choices do not visually preselect a default mode", async () => {
+  const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
+
+  for (const id of ["tutorial-mode-button", "rush-mode-button", "battle-mode-button", "battle-ai-mode-button"]) {
+    const match = html.match(new RegExp(`<button id="${id}" class="([^"]+)"`));
+    assert.ok(match, `${id} exists`);
+    assert.equal(match[1].includes("btn-primary"), false, `${id} is not styled as the default primary choice`);
+    assert.equal(match[1].includes("btn-secondary"), true, `${id} uses the neutral mode-choice style`);
+  }
+});
+
+test("main: Battle Main Menu lives with bottom mode controls like Rush", async () => {
+  const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const panel = html.match(/<div class="battle-panel"[\s\S]*?<\/div>/)?.[0] || "";
+  const controls = html.match(/<div id="battle-controls"[\s\S]*?<\/div>/)?.[0] || "";
+
+  assert.equal(panel.includes("btn-battle-abandon"), false, "Battle top turn panel does not contain Main Menu");
+  assert.match(controls, /id="btn-battle-abandon"/, "Battle bottom controls contain Main Menu");
+  assert.match(controls, /class="battle-only"/, "Battle controls use Battle mode visibility");
+});
+
 test("main: first boot shows only the intro dialog, then opens mode selection", async () => {
   const env = installEnv();
   try {
