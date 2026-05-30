@@ -91,6 +91,7 @@ export function createBattle({
   let terminal = null;
   let destroyed = false;
   let animating = false;
+  let paused = false;
   let aiThinking = false;
   let feedbackTimer = null;
   let animationTimer = null;
@@ -144,7 +145,7 @@ export function createBattle({
   }
 
   function isAITurn() {
-    return Boolean(vsAI && state && state.turn === AI_PLAYER && !terminal);
+    return Boolean(vsAI && state && state.turn === AI_PLAYER && !terminal && !paused);
   }
 
   function refreshLegal() {
@@ -159,8 +160,11 @@ export function createBattle({
       analysis: { battle: true },
       onReplayStart() {
         if (board && currentReplayAnalysis?.startState) {
+          if (board.clearWin) board.clearWin();
           board.update(currentReplayAnalysis.startState);
           board.markLegal([]);
+          setText(turnEl, playerLabel(currentReplayAnalysis.startState.turn));
+          showStatus("");
         }
       },
       onFrame(frame) {
@@ -275,6 +279,7 @@ export function createBattle({
 
   function handleTap(edgeId) {
     if (destroyed || !state) return;
+    if (paused) return;
     if (aiThinking || isAITurn()) {
       rejectMove(edgeId, "ai-thinking", thinkingText(AI_PLAYER));
       return;
@@ -296,6 +301,7 @@ export function createBattle({
     destroyed = false;
     terminal = null;
     animating = false;
+    paused = false;
     hideReplayUI();
     if (feedbackTimer) { clearTimeout(feedbackTimer); feedbackTimer = null; }
     clearAnimationTimer();
@@ -334,6 +340,7 @@ export function createBattle({
 
   function destroy() {
     destroyed = true;
+    paused = false;
     animating = true;
     if (feedbackTimer) { clearTimeout(feedbackTimer); feedbackTimer = null; }
     clearAnimationTimer();
@@ -342,11 +349,27 @@ export function createBattle({
     if (board) { board.destroy(); board = null; }
   }
 
+  function pause() {
+    if (destroyed) return;
+    paused = true;
+    clearAiTimer();
+    if (board) board.markLegal([]);
+  }
+
+  function resume() {
+    if (destroyed || !paused) return;
+    paused = false;
+    refreshLegal();
+    scheduleAiTurn();
+  }
+
   if (autoStart) start();
 
   return {
     start,
     destroy,
+    pause,
+    resume,
     tap: handleTap,
     refreshLegal,
     get state() { return snapshot(state); },

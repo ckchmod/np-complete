@@ -147,6 +147,7 @@ function fakeBoardFactory(boards) {
       options,
       legal: [],
       updates: [],
+      clearedWin: 0,
       update(next) {
         this.config = next;
         this.updates.push(next);
@@ -157,6 +158,9 @@ function fakeBoardFactory(boards) {
       shakeEdge() {},
       pulseNode() {},
       winCascade() {},
+      clearWin() {
+        this.clearedWin++;
+      },
       destroy() {},
     };
     boards.push(board);
@@ -225,8 +229,10 @@ test("battle replay UI is absent during play, then collapsed and opt-in after te
   await withDom(async () => {
     const boards = [];
     const replayMount = fakeEl("div");
+    const turnEl = fakeEl("span");
+    const statusEl = fakeEl("p");
     const battle = createBattle({
-      refs: { boardEl: fakeEl("svg"), statusEl: fakeEl("p"), replayMount },
+      refs: { boardEl: fakeEl("svg"), turnEl, statusEl, replayMount },
       generate: () => duelFixture(),
       boardFactory: fakeBoardFactory(boards),
       animationMs: 0,
@@ -236,6 +242,8 @@ test("battle replay UI is absent during play, then collapsed and opt-in after te
     assert.equal(replayMount.children.length, 0, "Battle analysis is not mounted during active play");
 
     battle.tap("white-target");
+    assert.equal(turnEl.textContent, "White", "Terminal HUD still names the player that just won");
+    assert.equal(statusEl.textContent, "White Wins!", "Terminal status announces the winner");
 
     const root = replayMount.children[0];
     const controls = findOne(root, (node) => node.classList?.contains("replay-controls"));
@@ -250,6 +258,9 @@ test("battle replay UI is absent during play, then collapsed and opt-in after te
     assert.match(text, /Zugzwang/);
 
     await findOne(root, (node) => node.classList?.contains("replay-open")).click();
+    assert.equal(boards[0].clearedWin, 1, "Replay start clears terminal win styling from the board");
+    assert.equal(turnEl.textContent, "White", "Replay start resets the HUD turn to the opening player");
+    assert.equal(statusEl.textContent, "", "Replay start clears the terminal status while the board is rewound");
     assert.equal(controls.classList.contains("hidden"), false);
     assert.equal(boards[0].updates.length, 2, "Replay opt-in resets the board to the start state");
 

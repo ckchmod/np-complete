@@ -92,6 +92,10 @@ function fakeBoardFactory(boards) {
   };
 }
 
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function battleSlackFixture() {
   return {
     id: "battle-slack",
@@ -296,4 +300,55 @@ test("battle: controller flow matches battle engine for the applied move", () =>
   assert.equal(battle.state.turn, expected.turn);
   assert.deepEqual(Object.fromEntries(battle.state.dirs), Object.fromEntries(expected.dirs));
   assert.deepEqual(Object.fromEntries(battle.state.charges), Object.fromEntries(expected.charges));
+});
+
+test("battle: pause freezes a queued AI turn until resume", async () => {
+  const boards = [];
+  let aiChoices = 0;
+  const battle = createBattle({
+    refs: { boardEl: fakeEl(), statusEl: fakeEl() },
+    generate: () => twoTargetFixture(),
+    boardFactory: fakeBoardFactory(boards),
+    vsAI: true,
+    aiMoveDelayMs: 5,
+    animationMs: 0,
+    chooseAIMove: () => {
+      aiChoices++;
+      return { edgeId: "p1" };
+    },
+  });
+
+  battle.start();
+  battle.tap("p2");
+  battle.pause();
+
+  await delay(25);
+  assert.equal(aiChoices, 0, "AI does not move while Battle rules are open");
+  assert.equal(battle.state.turn, "black", "queued AI turn is preserved while paused");
+  assert.equal(battle.state.history.length, 1, "only the human move is applied while paused");
+
+  battle.resume();
+  await delay(25);
+
+  assert.equal(aiChoices, 1, "AI turn resumes after the overlay closes");
+  assert.deepEqual(battle.terminal, { terminal: true, winner: "black", reason: "target" });
+});
+
+test("battle: pause ignores player taps without mutating state", () => {
+  const boards = [];
+  const battle = createBattle({
+    refs: { boardEl: fakeEl(), statusEl: fakeEl() },
+    generate: () => battleSlackFixture(),
+    boardFactory: fakeBoardFactory(boards),
+  });
+
+  const before = battle.start();
+  battle.pause();
+  battle.tap("s");
+
+  assert.equal(battle.state.turn, before.turn);
+  assert.deepEqual(Object.fromEntries(battle.state.dirs), Object.fromEntries(before.dirs));
+  assert.deepEqual(Object.fromEntries(battle.state.charges), Object.fromEntries(before.charges));
+  assert.equal(boards[0].updates.length, 0, "paused tap does not redraw from a move");
+  assert.deepEqual(boards[0].legal, [], "paused board remains non-interactive");
 });
