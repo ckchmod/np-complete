@@ -1,6 +1,6 @@
 # THE LOCK
 
-A minimalist phone-style puzzle built on **Nondeterministic Constraint Logic (NCL)**, the Hearn-Demaine model whose edge-reversal problem is **PSPACE-complete**. Six quick tutorials teach the rules, then you choose **Puzzle Rush** or **Battle**. Rush asks how many generated locks you can pick before three strikes. Battle turns the same constraint graph into a local hot-seat duel.
+A minimalist phone-style puzzle built on **Nondeterministic Constraint Logic (NCL)**, the Hearn-Demaine model whose edge-reversal problem is **PSPACE-complete**. Six quick tutorials teach the rules, then you choose **Puzzle Rush** or **Battle**. Rush asks how many generated locks you can pick before three strikes. Battle turns the same constraint graph into a local hot-seat duel or a fight against browser-controlled Black.
 
 ## The rules
 
@@ -16,7 +16,7 @@ Because the >=2 rule is satisfied at *every* moment, "win" is **not** "make the 
 Play starts with the intro and six tutorials. After the tutorials, mode selection offers two choices:
 
 - **Puzzle Rush:** endless solver-verified generated locks with move budgets, skips, and three strikes. When the run ends, you can copy the result, play again, or return to mode selection.
-- **Battle:** local hot-seat play for two people on the same device. After a win, you can replay Battle or return to mode selection. There is no network play, AI opponent, account system, or persistent Battle profile.
+- **Battle:** local hot-seat play for two people on the same device, or Battle vs AI with Black controlled by the browser. After a win, you can replay Battle or return to mode selection. There is no network play, account system, or persistent Battle profile.
 
 ## Battle rules
 
@@ -28,6 +28,7 @@ Battle keeps the NCL inflow law and adds a finite two-player layer:
 - Each edge has a finite number of charges. A flip spends one charge, and spent edges can't be flipped again.
 - White wins by flipping the White target. Black wins by flipping the Black target.
 - If it's your turn and you have no legal move, you lose.
+- In Battle vs AI, Black follows the same rules but chooses its moves automatically.
 
 ## Why it's actually hard, and what "PSPACE-complete" means
 
@@ -82,9 +83,18 @@ hostname -I
 ## Tests
 
 ```bash
-npm test           # node --test, 117 tests across engine, solver, levels, metrics, generator, Rush, Battle, render, and main flow
+npm test           # node --test across engine, solver, levels, metrics, generator, Rush, Battle, render, and main flow
 npm run gates      # prints the solver gates (THE LOCK + tutorials) as JSON
 ```
+
+## Manual offline QA checklist
+
+- Open the app in a browser.
+- Open DevTools, switch Network to Offline, then refresh the page.
+- Confirm the intro or tutorial screen still loads.
+- Navigate through the tutorials and confirm they still advance.
+- Start Puzzle Rush and confirm the board appears and plays normally.
+- Start Battle vs AI and confirm the board appears and the mode starts.
 
 ## Structure
 
