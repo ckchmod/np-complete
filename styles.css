@@ -52,6 +52,8 @@
   --mode-card-max: 380px;
   --mode-choice-min: 118px;
   --status-min: 22px;
+  --thinking-dot: 6px;
+  --thinking-glow: 8px;
 }
 
 html, body {
@@ -62,7 +64,27 @@ html, body {
   font-size: 14px;
   line-height: 1.4;
   overscroll-behavior: none;
+  overflow-x: hidden;
   -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding-top: env(safe-area-inset-top);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+}
+
+@supports (padding: max(0px)) {
+  body {
+    padding-top: max(env(safe-area-inset-top), 0px);
+    padding-right: max(env(safe-area-inset-right), 0px);
+    padding-bottom: max(env(safe-area-inset-bottom), 0px);
+    padding-left: max(env(safe-area-inset-left), 0px);
+  }
 }
 
 /* ── App shell ────────────────────────────────────────────────────────────── */
@@ -70,11 +92,12 @@ html, body {
 #app {
   display: flex;
   flex-direction: column;
-  height: 100dvh;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  width: min(100%, 480px);
   max-width: 480px;
   margin: 0 auto;
-  /* Reserve device safe areas (notch / home indicator) — viewport-fit=cover. */
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   position: relative;
 }
 
@@ -96,6 +119,7 @@ html, body {
   letter-spacing: 0.12em;
   color: var(--c-white);
   text-transform: uppercase;
+  min-width: 0;
 }
 
 #hud {
@@ -104,6 +128,7 @@ html, body {
   gap: 4px;
   font-family: var(--font-mono);
   font-size: 12px;
+  min-width: 0;
 }
 
 .hud-value {
@@ -138,11 +163,13 @@ html, body {
   justify-content: center;
   padding: 8px 12px;
   min-height: 0;
+  min-width: 0;
 }
 
 #battle-wrap {
   flex: 1 1 0;
   min-height: 0;
+  min-width: 0;
   padding: var(--space-2) var(--space-3) var(--space-3);
   flex-direction: column;
   gap: var(--space-2);
@@ -153,7 +180,7 @@ html, body {
   height: 100%;
   max-height: 100%;
   overflow: visible;
-  touch-action: none;
+  touch-action: manipulation;
 }
 
 .battle-board {
@@ -202,6 +229,30 @@ html, body {
   flex-shrink: 0;
 }
 
+.battle-status.thinking {
+  color: var(--c-owner-black);
+}
+
+.battle-status.thinking::after {
+  content: "";
+  display: inline-block;
+  width: var(--thinking-dot);
+  height: var(--thinking-dot);
+  margin-left: var(--space-2);
+  border-radius: 50%;
+  background: var(--c-owner-black);
+  animation: thinking-pulse 0.8s ease-in-out infinite alternate;
+}
+
+.board.thinking {
+  filter: drop-shadow(0 0 var(--thinking-glow) var(--c-owner-black));
+}
+
+@keyframes thinking-pulse {
+  from { opacity: 0.35; transform: scale(0.72); }
+  to { opacity: 1; transform: scale(1); }
+}
+
 .battle-result {
   border: var(--panel-border);
   border-color: var(--c-legal);
@@ -228,6 +279,7 @@ html, body {
 
 .edge-group {
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 .edge-line {
@@ -244,10 +296,12 @@ html, body {
 
 .edge-hit {
   stroke: transparent;
-  stroke-width: 12; /* wide invisible hit corridor (~44px target); the path is transparent so overlap is harmless */
+  stroke-width: 44; /* invisible 44px hit corridor; the path is transparent so overlap is harmless */
+  vector-effect: non-scaling-stroke;
   fill: none;
   pointer-events: stroke;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 /* Weight variants */
@@ -510,8 +564,8 @@ html, body {
 
 #controls {
   display: flex;
-  gap: 8px;
-  padding: 6px 16px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
   flex-shrink: 0;
 }
 
@@ -528,7 +582,8 @@ html, body {
   cursor: pointer;
   transition: background var(--transition), color var(--transition), opacity var(--transition);
   padding: 9px 16px;
-  min-height: 40px;
+  min-width: 44px;
+  min-height: 44px;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
@@ -558,9 +613,18 @@ html, body {
   color: var(--c-grey);
   border: none;
   padding: 8px 12px;
+  min-width: 44px;
   min-height: 44px;
 }
 .btn-ghost:hover:not(:disabled) { color: var(--c-white); }
+
+.abandon-control {
+  flex: 0 0 auto;
+  border: var(--panel-border);
+  color: var(--c-grey);
+  font-size: var(--text-2xs);
+  padding: var(--space-2) var(--space-3);
+}
 
 /* ── Nav bar ──────────────────────────────────────────────────────────────── */
 
@@ -570,6 +634,7 @@ html, body {
   padding: 4px 12px 8px;
   gap: 4px;
   flex-shrink: 0;
+  min-width: 0;
 }
 
 .nav-label {
@@ -653,8 +718,8 @@ html, body {
 }
 .btn-help {
   flex: none;
-  width: 26px;
-  height: 26px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   border: 1px solid var(--c-dim);
   border-radius: 50%;
@@ -662,7 +727,11 @@ html, body {
   color: var(--c-grey);
   font-family: var(--font-label);
   font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
+  touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
 .btn-help:hover { color: var(--c-white); border-color: var(--c-grey); }
@@ -694,6 +763,8 @@ html, body {
 
 .mode-card {
   max-width: var(--mode-card-max);
+  max-height: calc(100svh - var(--space-8));
+  overflow-y: auto;
   padding: var(--space-6) var(--space-5);
 }
 
@@ -780,7 +851,8 @@ html, body {
   font-family: var(--font-label);
   font-size: 12px;
   letter-spacing: 0.08em;
-  white-space: nowrap;
+  max-width: calc(100% - 24px);
+  text-align: center;
   opacity: 0;
   pointer-events: none;
   z-index: 20;
@@ -900,10 +972,103 @@ html, body {
   letter-spacing: 0.1em;
 }
 
+.replay-ui.hidden,
+.replay-controls.hidden {
+  display: none;
+}
+
+.replay-ui {
+  border: var(--panel-border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  padding: var(--space-2);
+}
+
+.replay-open {
+  width: 100%;
+}
+
+.replay-controls {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.replay-speed-label,
+.replay-progress {
+  min-height: 44px;
+  border: var(--panel-border);
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--c-grey);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.replay-speed-label {
+  gap: var(--space-2);
+  grid-column: span 2;
+}
+
+.replay-speed {
+  min-height: 44px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  color: var(--c-white);
+  font-family: var(--font-label);
+  font-size: var(--text-sm);
+  padding: 0 var(--space-2);
+}
+
+.replay-analysis {
+  margin-top: var(--space-2);
+  border-top: var(--panel-border);
+  padding-top: var(--space-2);
+}
+
+.replay-analysis-summary {
+  cursor: pointer;
+  color: var(--c-slack);
+  font-family: var(--font-label);
+  font-size: var(--text-xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.replay-analysis-grid {
+  display: grid;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+.replay-analysis-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.replay-analysis-label {
+  color: var(--c-grey);
+  text-transform: uppercase;
+}
+
+.replay-analysis-value {
+  color: var(--c-white);
+  text-align: right;
+}
+
 .result-actions {
   display: flex;
-  gap: 8px;
-  padding-top: 4px;
+  gap: var(--space-2);
+  padding-top: var(--space-1);
 }
 
 /* ── Scrollbar ────────────────────────────────────────────────────────────── */
@@ -939,6 +1104,55 @@ html, body {
   .illegal-explain-current,
   .illegal-explain-weight,
   .illegal-explain-result,
-  .illegal-explain-low { animation: none !important; }
+  .illegal-explain-low,
+  .battle-status.thinking::after { animation: none !important; }
   * { transition-duration: 0.01ms !important; }
+}
+
+@media (max-width: 420px) {
+  #top-bar {
+    flex-wrap: wrap;
+    gap: 6px 8px;
+  }
+
+  #hud,
+  #rush-hud {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  #controls,
+  #rush-controls,
+  #nav-bar {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  #nav-bar {
+    flex-wrap: wrap;
+  }
+
+  .nav-label {
+    flex-basis: 100%;
+    order: 3;
+  }
+
+  .nav-skip {
+    flex: 1 1 100%;
+  }
+
+  #board-wrap,
+  #battle-wrap {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .overlay {
+    padding: 12px;
+  }
+
+  .overlay-card,
+  .result-inner {
+    max-width: 100%;
+  }
 }

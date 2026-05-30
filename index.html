@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>THE LOCK</title>
+  <link rel="manifest" href="manifest.json" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
@@ -45,6 +46,7 @@
       <div class="battle-panel" aria-label="Current player">
         <span class="battle-label">Turn</span>
         <span id="battle-turn" class="battle-turn">White</span>
+        <button id="btn-battle-abandon" class="btn btn-ghost abandon-control" type="button" aria-label="Abandon battle and return to main menu">Main Menu</button>
       </div>
       <svg id="battle-board" class="board battle-board" aria-label="battle puzzle board"></svg>
       <p id="battle-status" class="battle-status" aria-live="polite"></p>
@@ -54,6 +56,7 @@
           <button id="btn-battle-again" class="btn btn-primary" type="button">Play again</button>
           <button id="btn-battle-menu" class="btn btn-secondary" type="button">Choose mode</button>
         </div>
+        <div id="battle-replay-ui" class="replay-mount" aria-live="polite"></div>
       </div>
     </main>
 
@@ -64,12 +67,14 @@
     <div id="controls" class="tutorial-only">
       <button id="btn-undo" class="btn btn-secondary" aria-label="Undo last move">Undo</button>
       <button id="btn-reset" class="btn btn-secondary" aria-label="Reset to start">Reset</button>
+      <button id="btn-tutorial-menu" class="btn btn-ghost abandon-control" type="button" aria-label="Abandon tutorial and return to main menu">Main Menu</button>
     </div>
 
     <!-- Rush controls -->
     <div id="rush-controls" class="rush-only">
       <button id="btn-undo" class="btn btn-secondary" aria-label="Undo last Rush move (+1 move penalty)">Undo</button>
       <button id="btn-skip" class="btn btn-secondary" aria-label="Skip this lock (costs a life)">Skip (−1 ✕)</button>
+      <button id="btn-rush-abandon" class="btn btn-ghost abandon-control" type="button" aria-label="Abandon Puzzle Rush and return to main menu">Main Menu</button>
     </div>
 
     <!-- Rush transient toast (e.g. "SKIPPED · −1 life") -->
@@ -93,6 +98,7 @@
         <div class="result-row"><span class="result-label">Score</span><span class="result-value" id="result-score">—</span></div>
         <div class="result-pb" id="result-pb"></div>
         <div class="result-hash" id="result-hash"></div>
+        <div id="replay-ui" class="replay-mount" aria-live="polite"></div>
         <div class="result-actions">
           <button id="btn-share" class="btn btn-primary">Copy result</button>
           <button id="btn-play-again" class="btn btn-secondary">Play again</button>
@@ -145,8 +151,9 @@
           <li>Each edge has <b>limited charges</b>; spent edges cannot move.</li>
           <li>Reverse your <span class="intro-red">target</span> edge to win.</li>
           <li>No legal move on your turn means you lose.</li>
+          <li>In <b>vs AI</b>, Black thinks for a beat and moves automatically.</li>
         </ul>
-        <p class="intro-foot">Local hot-seat: pass the phone after each legal flip.</p>
+        <p class="intro-foot">Hot-seat: pass the phone after each legal flip. Vs AI: you play White; Black thinks briefly, then moves.</p>
         <div class="result-actions">
           <button id="btn-battle-close" class="btn btn-primary">Back to battle</button>
         </div>
@@ -156,17 +163,27 @@
     <div id="mode-select" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Choose game mode">
       <div class="overlay-card mode-card">
         <div class="intro-logo">CHOOSE MODE</div>
-        <p class="intro-goal">One lock, two ways in.</p>
+        <p class="intro-goal">One lock, four ways in.</p>
         <div class="mode-grid" aria-label="Available modes">
+          <button id="tutorial-mode-button" class="btn btn-secondary mode-choice" type="button">
+            <span class="mode-kicker">Learn</span>
+            <span class="mode-title">Tutorial</span>
+            <span class="mode-copy">Practice the rule of two with guided locks and scoring.</span>
+          </button>
           <button id="rush-mode-button" class="btn btn-primary mode-choice" type="button">
             <span class="mode-kicker">Solo</span>
-            <span class="mode-title">Rush</span>
+            <span class="mode-title">Puzzle Rush</span>
             <span class="mode-copy">Pick generated locks before three strikes run out.</span>
           </button>
           <button id="battle-mode-button" class="btn btn-secondary mode-choice" type="button">
             <span class="mode-kicker">Versus</span>
-            <span class="mode-title">Battle</span>
-            <span class="mode-copy">Take turns spending charges and racing the rival target.</span>
+            <span class="mode-title">Battle Hot-seat</span>
+            <span class="mode-copy">Hot-seat duel: pass the phone and race the rival target.</span>
+          </button>
+          <button id="battle-ai-mode-button" class="btn btn-secondary mode-choice" type="button">
+            <span class="mode-kicker">Solo Duel</span>
+            <span class="mode-title">Battle vs AI</span>
+            <span class="mode-copy">Play White while Black answers automatically after a short think.</span>
           </button>
         </div>
       </div>
@@ -183,10 +200,10 @@
           <li>You can only flip an arrow if every node stays satisfied.</li>
           <li>A faint outline marks where the <span class="intro-red">red</span> arrow must end up.</li>
         </ul>
-        <p class="intro-foot">A few quick puzzles teach you the rest, then pick as many locks as you can.</p>
+        <p class="intro-foot">Take the tutorial first, or jump straight into a mode from the main menu.</p>
         <div class="result-actions">
-          <button id="btn-start" class="btn btn-primary">Start</button>
-          <button id="btn-skip-tutorial" class="btn btn-secondary" aria-label="Skip the tutorial and go straight to Rush">Skip tutorial</button>
+          <button id="btn-start" class="btn btn-primary">Choose mode</button>
+          <button id="btn-skip-tutorial" class="btn btn-secondary" aria-label="Start the tutorial">Start tutorial</button>
         </div>
       </div>
     </div>
