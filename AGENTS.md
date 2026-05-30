@@ -1,18 +1,20 @@
 # PROJECT KNOWLEDGE BASE
 
-**Generated:** 2026-05-29
-**Commit:** dc394c2
+**Generated:** 2026-05-30
+**Commit:** post-popular-phone-game milestone
 **Branch:** main
 
 ## OVERVIEW
-THE LOCK is a static, mobile-first browser puzzle game built from Nondeterministic Constraint Logic. Stack is vanilla ESM JavaScript, SVG, HTML, CSS, Node's built-in test runner, and Python's stdlib HTTP server.
+THE LOCK is a static, mobile-first browser puzzle game built from Nondeterministic Constraint Logic. Stack is vanilla ESM JavaScript, SVG, HTML, CSS, Node's built-in test runner, Python's stdlib HTTP server, and a static PWA shell with manifest plus service worker.
 
 ## STRUCTURE
 ```
 np-complete/
 ├── index.html              # browser shell; loads src/main.js directly
-├── styles.css              # noir theme, mode visibility, SVG state classes
-├── src/                    # app, rules, solver, generator, rendering
+├── styles.css              # noir theme, mode visibility, replay/PWA/update UI, SVG state classes
+├── manifest.json           # PWA app metadata
+├── sw.js                   # offline cache service worker
+├── src/                    # app, rules, solver, generator, rendering, Battle AI, replay
 ├── test/                   # node:test suite; module-focused files
 ├── scripts/gates.mjs       # solver/non-triviality JSON gate CLI
 └── docs/superpowers/specs/ # dated design and quality-pass specs
@@ -21,14 +23,17 @@ np-complete/
 ## WHERE TO LOOK
 | Task | Location | Notes |
 |------|----------|-------|
-| Browser entry / flow | `index.html`, `src/main.js` | `index.html` declares hard-coded IDs; `main.js` toggles intro, tutorials, Rush. |
+| Browser entry / flow | `index.html`, `src/main.js` | `index.html` declares hard-coded IDs; `main.js` toggles intro, mode hub, tutorials, Rush, Battle, and service worker registration. |
 | NCL legality | `src/engine.js` | Pure logic. No DOM. Inflow invariant lives here. |
 | Solver gates / par | `src/solver.js`, `scripts/gates.mjs` | BFS computes optimal length and non-triviality reports. |
 | Authored levels | `src/levels.js` | Source of truth for tutorials, THE_LOCK, `par`, `target`, node layout. |
 | Rush generation | `src/generator.js`, `src/rush.js` | Generator composes gadgets, validates by solver, then Rush budgets/strikes. |
+| Battle rules / AI | `src/battleEngine.js`, `src/battleSolver.js`, `src/battleGenerator.js`, `src/battle.js`, `src/aiBattle.js` | Battle is a finite charged NCL game. Battle vs AI is local deterministic rule/search code, not an LLM or service. |
+| Replay surfaces | `src/replay.js`, `src/replayUI.js`, `src/battleReplay.js` | Replay and post-game Battle analysis. Hide analysis during active play. |
+| PWA / offline | `manifest.json`, `sw.js`, `src/main.js` | Static installable shell, offline cache, and service worker update notice. |
 | SVG board contract | `src/render.js`, `styles.css` | CSS classes/data attrs are coupled to renderer output. |
 | Tutorial session state | `src/game.js` | Move history, undo/reset, localStorage resume, scoring/share. |
-| Tests | `test/*.test.js` | 117 current node:test cases; README count may lag. |
+| Tests | `test/*.test.js` | 182 current node:test cases at this milestone; avoid hard-coding counts in README. |
 | Product/spec intent | `docs/superpowers/specs/*.md` | Use for domain decisions before changing mechanics. |
 
 ## CODE MAP
@@ -43,6 +48,7 @@ np-complete/
 | `createBoard` | function | `src/render.js` | Builds SVG board and exposes update/animation API. |
 | `createGame` | function | `src/game.js` | Tutorial-mode controller. |
 | `createRush` | function | `src/rush.js` | Survival-mode controller. |
+| `createBattle` | function | `src/battle.js` | Battle Hot-seat and Battle vs AI controller. |
 | `TUTORIALS`, `THE_LOCK`, `LEVELS` | constants | `src/levels.js` | Authored game data. |
 
 ## CONVENTIONS
@@ -50,11 +56,15 @@ np-complete/
 - There is no bundler or build step. Static files are the deployable artifact.
 - Serve over HTTP. `file://index.html` does not work for ES modules.
 - Keep runtime dependencies at zero unless the user explicitly changes that constraint.
+- Current flow starts at intro, then a mode hub with Tutorial, Puzzle Rush, Battle Hot-seat, and Battle vs AI. Active Tutorial/Rush/Battle surfaces have Main Menu or abandon controls.
+- Battle vs AI must stay client-side and deterministic/legal under Battle rules. Do not describe it as an LLM, chatbot, API, or external AI service.
+- Replay analysis belongs after terminal Battle states or explicit replay use. Do not expose strategic analysis during active play.
 - Code comments are unusually load-bearing in `src/engine.js`, `src/solver.js`, `src/generator.js`, and `src/levels.js`; update them only when behavior changes.
 - Domain names: thin edge = weight 1, thick edge = weight 2, red edge = target, `par` = solver optimal length.
 - `levels.js` par values are contracts with `bfsSolve`, not decorative metadata.
 - DOM refs use exact IDs from `index.html`; class names in `styles.css` are part of the renderer contract.
 - `scripts/gates.mjs` must print one JSON object to stdout and exit nonzero on error.
+- `manifest.json` and `sw.js` are part of the shipped static artifact. Keep PWA/offline behavior zero-dependency and compatible with GitHub Pages.
 
 ## ANTI-PATTERNS (THIS PROJECT)
 - Do not weaken the inflow invariant: every node must always have incoming weight >= 2.
@@ -62,18 +72,21 @@ np-complete/
 - Do not describe a single fixed board as PSPACE-complete; hardness applies to the infinite NCL family.
 - Do not add framework/bundler structure (`components/`, `public/`, etc.) unless requested.
 - Do not move DOM IDs/classes casually; JS and CSS are tightly coupled to them.
+- Do not add network calls or model dependencies for Battle vs AI. It is browser game AI over local game state.
 - Do not edit `.omc/` or `.omo/` as project source; they are local agent/runtime state.
 
 ## UNIQUE STYLES
 - Minimal noir UI: near-black surface, white/gray graph, red target, cyan legal/win glow, amber slack/low-budget.
 - Board coordinates use portrait phone space; authored levels keep `x` in `[0,100]`, `y` in `[0,160]`.
 - Rush boards are generated live, seeded with `makeRng`, capped for phone legibility, and solver-verified before display.
-- Help is context-aware: tutorial intro outside Rush, Rush rules inside Rush.
-- Current source has 6 tutorials and tests have 117 cases; older prose may still say 5 tutorials / 44 tests.
+- The mode hub exposes Tutorial, Puzzle Rush, Battle Hot-seat, and Battle vs AI after the intro.
+- Help is context-aware: tutorial intro outside active modes, Rush rules inside Rush, Battle rules inside Battle.
+- Current source has 6 tutorials and tests have 182 cases at this milestone; older prose may still say 5 tutorials / 44 or 117 tests.
 
 ## WORKFLOW
 - After every significant milestone, update relevant docs and push the branch once verification passes.
 - Before pushing, inspect intended changes, run the project checks, and keep commits atomic.
+- GitHub Pages updates from pushes to `main` through `.github/workflows/pages.yml`, deploying the static repo root with no build step.
 
 ## COMMANDS
 ```bash
@@ -84,6 +97,6 @@ npm run gates      # JSON solver gates for THE LOCK + tutorials
 ```
 
 ## NOTES
-- Baseline on 2026-05-29: `npm test` passes 117/117; `npm run gates` reports THE_LOCK optimal 16, reachableCount 92, backtracking required.
+- Baseline on 2026-05-30 after the popular-phone-game milestone: `npm test` passes 182/182; `npm run gates` reports THE_LOCK optimal 16, reachableCount 92, backtracking required.
 - `.nojekyll` is present for GitHub Pages static hosting.
 - Root `CLAUDE.md` already mandates simple, surgical, goal-verified changes; keep AGENTS guidance project-specific.

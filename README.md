@@ -1,6 +1,6 @@
 # THE LOCK
 
-A minimalist phone-style puzzle built on **Nondeterministic Constraint Logic (NCL)**, the Hearn-Demaine model whose edge-reversal problem is **PSPACE-complete**. Six quick tutorials teach the rules, then you choose **Puzzle Rush** or **Battle**. Rush asks how many generated locks you can pick before three strikes. Battle turns the same constraint graph into a local hot-seat duel or a fight against browser-controlled Black.
+A minimalist phone-style puzzle built on **Nondeterministic Constraint Logic (NCL)**, the Hearn-Demaine model whose edge-reversal problem is **PSPACE-complete**. The intro opens to a mode menu with **Tutorial**, **Puzzle Rush**, **Battle Hot-seat**, and **Battle vs AI**. Rush asks how many generated locks you can pick before three strikes. Battle turns the same constraint graph into a local duel, either against another person on the same device or browser-controlled Black.
 
 ## The rules
 
@@ -13,10 +13,14 @@ Because the >=2 rule is satisfied at *every* moment, "win" is **not** "make the 
 
 ## Game flow
 
-Play starts with the intro and six tutorials. After the tutorials, mode selection offers two choices:
+Play starts with the intro, then opens the mode menu. You can start with Tutorial, jump into Puzzle Rush, play Battle Hot-seat, or play Battle vs AI. Tutorial, Rush, and Battle screens include Main Menu or abandon controls so you can leave an active mode without waiting for a win or loss.
 
+- **Tutorial:** six authored boards that teach the inflow rule, target locks, and scoring.
 - **Puzzle Rush:** endless solver-verified generated locks with move budgets, skips, and three strikes. When the run ends, you can copy the result, play again, or return to mode selection.
-- **Battle:** local hot-seat play for two people on the same device, or Battle vs AI with Black controlled by the browser. After a win, you can replay Battle or return to mode selection. There is no network play, account system, or persistent Battle profile.
+- **Battle Hot-seat:** local play for two people on the same device.
+- **Battle vs AI:** the same Battle rules with Black controlled by client-side rule/search code. It doesn't call an LLM, server, or external service.
+
+There is no network play, account system, or persistent Battle profile.
 
 ## Battle rules
 
@@ -28,7 +32,8 @@ Battle keeps the NCL inflow law and adds a finite two-player layer:
 - Each edge has a finite number of charges. A flip spends one charge, and spent edges can't be flipped again.
 - White wins by flipping the White target. Black wins by flipping the Black target.
 - If it's your turn and you have no legal move, you lose.
-- In Battle vs AI, Black follows the same rules but chooses its moves automatically.
+- In Battle vs AI, Black follows the same rules but chooses its moves with deterministic browser game AI.
+- After a Battle ends, replay analysis can show check moments, missed defenses, and zugzwang notes. It stays hidden during active play.
 
 ## Why it's actually hard, and what "PSPACE-complete" means
 
@@ -67,7 +72,7 @@ Then open <http://localhost:8000>.
 
 ### GitHub Pages
 
-The repository includes a Pages workflow at `.github/workflows/pages.yml`. Pushes to `main` upload the static repo root and deploy it with GitHub Pages, so the published view updates from the current branch contents without a build step.
+The repository includes a Pages workflow at `.github/workflows/pages.yml`. Pushes to `main` upload the static repo root and deploy it with GitHub Pages, so the published view updates from `main` without a build step.
 
 ### Test on your phone (same Wi-Fi)
 
@@ -83,7 +88,7 @@ hostname -I
 ## Tests
 
 ```bash
-npm test           # node --test across engine, solver, levels, metrics, generator, Rush, Battle, render, and main flow
+npm test           # node --test across engine, solver, levels, metrics, generator, Rush, Battle, replay, PWA, render, and main flow
 npm run gates      # prints the solver gates (THE LOCK + tutorials) as JSON
 ```
 
@@ -113,7 +118,13 @@ npm run gates      # prints the solver gates (THE LOCK + tutorials) as JSON
 | `src/battleSolver.js` | Finite charged-game solver and balance metrics for generated Battle boards |
 | `src/battleGenerator.js` | Deterministic Battle board generator with solver-complete balance checks |
 | `src/battle.js` | Battle controller for local hot-seat play and injected UI refs |
-| `src/main.js` | Bootstrap: intro, tutorials, mode selection, Rush, and Battle |
+| `src/aiBattle.js` | Client-side Battle vs AI move choice using rule/search heuristics, not an LLM |
+| `src/replay.js` | Generic replay timeline helpers for move history and snapshots |
+| `src/replayUI.js` | Shared replay controls and UI binding |
+| `src/battleReplay.js` | Battle replay analysis for checks, missed defenses, and zugzwang after terminal play |
+| `src/main.js` | Bootstrap: intro, mode menu, tutorials, Rush, Battle, and service worker registration |
+| `manifest.json` | PWA metadata for installable app shell |
+| `sw.js` | Service worker and offline cache for the static app |
 | `scripts/gates.mjs` | JSON solver gate CLI |
 | `scripts/metric-report.mjs` | Zero-dependency generated-board metric report CLI |
 | `docs/superpowers/specs/` | Design and quality-pass specs |
