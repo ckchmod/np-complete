@@ -34,6 +34,9 @@ const battleBoard = document.getElementById("battle-board");
 const battleTurn = document.getElementById("battle-turn");
 const battleStatus = document.getElementById("battle-status");
 const battleResult = document.getElementById("battle-result");
+const battleResultMessage = document.getElementById("battle-result-message");
+const btnBattleAgain = document.getElementById("btn-battle-again");
+const btnBattleMenu = document.getElementById("btn-battle-menu");
 
 let currentIndex = 0;
 let currentGame = null;
@@ -113,7 +116,8 @@ function showModeSelect() {
   if (rushIntro) rushIntro.classList.add("hidden");
   if (battleIntro) battleIntro.classList.add("hidden");
   if (rushOver) { rushOver.classList.remove("visible"); rushOver.classList.add("hidden"); }
-  if (battleResult) { battleResult.textContent = ""; battleResult.classList.add("hidden"); }
+  if (battleResultMessage) battleResultMessage.textContent = "";
+  if (battleResult) battleResult.classList.add("hidden");
   mountEl.classList.remove("mode-rush", "mode-battle");
   if (titleEl) titleEl.textContent = "CHOOSE MODE";
   if (hintEl) hintEl.textContent = "Pick a way through the lock.";
@@ -132,7 +136,8 @@ function enterBattle() {
   if (rushIntro) rushIntro.classList.add("hidden");
   if (battleIntro) battleIntro.classList.add("hidden");
   if (rushOver) { rushOver.classList.remove("visible"); rushOver.classList.add("hidden"); }
-  if (battleResult) { battleResult.textContent = ""; battleResult.classList.add("hidden"); }
+  if (battleResultMessage) battleResultMessage.textContent = "";
+  if (battleResult) battleResult.classList.add("hidden");
   mountEl.classList.remove("mode-rush");
   mountEl.classList.add("mode-battle");
   if (titleEl) titleEl.textContent = "BATTLE";
@@ -143,10 +148,8 @@ function enterBattle() {
     refs: { boardEl: battleBoard, turnEl: battleTurn, statusEl: battleStatus },
     seed,
     onTerminal({ message }) {
-      if (battleResult) {
-        battleResult.textContent = message;
-        battleResult.classList.remove("hidden");
-      }
+      if (battleResultMessage) battleResultMessage.textContent = message;
+      if (battleResult) battleResult.classList.remove("hidden");
     },
   });
   battle.start();
@@ -241,8 +244,12 @@ const btnReset = document.getElementById("btn-reset");
 if (btnReset) btnReset.addEventListener("click", clearHandoff);
 
 const btnRushAgain = document.getElementById("btn-rush-again");
+const btnRushMenu = document.getElementById("btn-rush-menu");
 const btnRushShare = document.getElementById("btn-rush-share");
 if (btnRushAgain) btnRushAgain.addEventListener("click", enterRush);
+if (btnRushMenu) btnRushMenu.addEventListener("click", showModeSelect);
+if (btnBattleAgain) btnBattleAgain.addEventListener("click", enterBattle);
+if (btnBattleMenu) btnBattleMenu.addEventListener("click", showModeSelect);
 if (btnRushMode) btnRushMode.addEventListener("click", enterRush);
 if (btnBattleMode) btnBattleMode.addEventListener("click", enterBattle);
 if (btnRushShare) btnRushShare.addEventListener("click", () => {

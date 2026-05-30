@@ -97,7 +97,7 @@ function installEnv() {
     "rush-moves", "btn-skip", "rush-toast", "move-count", "par-display", "result-card",
     "result-moves", "result-par", "result-stars", "result-score", "result-pb", "result-hash",
     "btn-share", "btn-undo", "btn-reset", "rush-final-score", "rush-best", "rush-stats",
-    "btn-rush-again", "btn-rush-share"
+    "btn-rush-again", "btn-rush-share", "btn-rush-menu", "battle-result-message", "btn-battle-again", "btn-battle-menu"
   ];
   for (const id of ids) elements.set(id, fakeEl(id));
   for (const id of ["rush-over", "rush-intro", "battle-intro", "mode-select", "battle-result", "result-card"]) {
@@ -208,4 +208,41 @@ test("index: Battle rules copy covers the required short rules", async () => {
   assert.match(html, /limited charges/);
   assert.match(html, /Reverse your .*target.* edge to win/);
   assert.match(html, /No legal move on your turn means you lose/);
+});
+
+test("main: post-game action buttons can replay or return to mode selection", async () => {
+  const env = installEnv();
+  try {
+    const { TUTORIALS } = await import("../src/levels.js");
+    await import(`../src/main.js?post-game-actions-${Date.now()}`);
+
+    for (let step = 0; step < TUTORIALS.length; step++) env.el("nav-next").click();
+
+    env.el("rush-mode-button").click();
+    assert.equal(env.el("app").classList.contains("mode-rush"), true, "Rush starts from mode select");
+    env.el("btn-rush-menu").click();
+    assert.equal(env.el("mode-select").classList.contains("hidden"), false, "Rush menu action returns to mode selection");
+    assert.equal(env.el("app").classList.contains("mode-rush"), false, "Rush menu action tears down Rush mode");
+
+    env.el("battle-mode-button").click();
+    assert.equal(env.el("app").classList.contains("mode-battle"), true, "Battle starts from mode select");
+    env.el("btn-battle-again").click();
+    assert.equal(env.el("app").classList.contains("mode-battle"), true, "Battle replay stays in Battle mode");
+    assert.equal(env.el("battle-result").classList.contains("hidden"), true, "Battle replay clears the terminal card");
+
+    env.el("btn-battle-menu").click();
+    assert.equal(env.el("mode-select").classList.contains("hidden"), false, "Battle menu action returns to mode selection");
+    assert.equal(env.el("app").classList.contains("mode-battle"), false, "Battle menu action tears down Battle mode");
+  } finally {
+    env.restore();
+  }
+});
+
+test("index: terminal Rush and Battle surfaces offer replay and mode selection", async () => {
+  const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
+
+  assert.match(html, /id="btn-rush-again"/);
+  assert.match(html, /id="btn-rush-menu"/);
+  assert.match(html, /id="btn-battle-again"/);
+  assert.match(html, /id="btn-battle-menu"/);
 });

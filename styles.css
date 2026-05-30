@@ -220,6 +220,10 @@ html, body {
 
 .battle-result.hidden { display: none; }
 
+.battle-actions {
+  margin-top: var(--space-3);
+}
+
 /* ── Edge styles ──────────────────────────────────────────────────────────── */
 
 .edge-group {
