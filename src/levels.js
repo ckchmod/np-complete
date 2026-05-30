@@ -269,8 +269,8 @@ export const THE_LOCK = {
 
 
 // -- THE LOCK V2 ----------------------------------------------------------------
-// 43 nodes, 51 edges. A deeper flagship board built by scaling THE_LOCK's shuttle
-// head and serial slack-pump ladder, then adding a free reservoir triangle so the
+// 43 nodes, 52 edges. A deeper flagship board built by scaling THE_LOCK's shuttle
+// head and serial slack-pump ladder, then tying in a reservoir triangle so the
 // reachable component is large enough to feel like real search without hiding the
 // optimal route.
 //
@@ -279,11 +279,11 @@ export const THE_LOCK = {
 //    gadget families as THE_LOCK.
 //  - The ladder is extended to Q0..Q30. Solver route still has to pump slack from
 //    the OR-pair back down the chain before pK can feed K.
-//  - R1/R2/R3 is a thick-edge battery/reservoir triangle. It is independent of
-//    the shortest solve, but each node starts with two incoming thick edges so the
-//    component contributes legal search breadth instead of invalid slack.
+//  - R1/R2/R3 is a thick-edge battery/reservoir triangle tied near the upper
+//    ladder. It is independent of the shortest solve, but every reservoir node is
+//    still in the target component instead of being disconnected noise.
 //
-// Solver-verified: par = 40, reachable component = 12,272 states, target NOT
+// Solver-verified: par = 40, reachable component = 24,544 states, target NOT
 // flippable on move 1, backtracking required, contentionScore = 2.
 export const THE_LOCK_V2 = {
   id: "the-lock-v2",
@@ -385,6 +385,7 @@ export const THE_LOCK_V2 = {
     { id: "y2", u: "Q30", v: "Y2", w: 1, dir: "uv" },
     { id: "ya", u: "Y1", v: "Y2", w: 2, dir: "uv" },
     { id: "yb", u: "Y1", v: "Y2", w: 2, dir: "vu" },
+    { id: "qr", u: "Q25", v: "R3", w: 1, dir: "uv" },
     // Battery/reservoir triangle: three bidirectional thick pairs.
     { id: "r12", u: "R1", v: "R2", w: 2, dir: "uv" },
     { id: "r21", u: "R1", v: "R2", w: 2, dir: "vu" },

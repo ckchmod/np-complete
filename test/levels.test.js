@@ -110,6 +110,34 @@ test("every level designates exactly one target edge", () => {
   }
 });
 
+test("every authored level is connected to its target component", () => {
+  for (const level of LEVELS) {
+    const targetEdge = level.edges.find((edge) => edge.id === level.target);
+    const adjacent = new Map(level.nodes.map((node) => [node.id, []]));
+    for (const edge of level.edges) {
+      adjacent.get(edge.u).push(edge.v);
+      adjacent.get(edge.v).push(edge.u);
+    }
+    const seen = new Set([targetEdge.u, targetEdge.v]);
+    const queue = [targetEdge.u, targetEdge.v];
+    while (queue.length) {
+      const nodeId = queue.shift();
+      for (const next of adjacent.get(nodeId)) {
+        if (!seen.has(next)) {
+          seen.add(next);
+          queue.push(next);
+        }
+      }
+    }
+
+    assert.deepEqual(
+      level.nodes.map((node) => node.id).filter((nodeId) => !seen.has(nodeId)),
+      [],
+      `${level.id}: disconnected nodes are not honest target-puzzle topology`
+    );
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Solvability + par == solver optimal
 // ---------------------------------------------------------------------------
