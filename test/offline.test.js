@@ -225,13 +225,13 @@ test("offline: service worker caches the core app shell", async () => {
   listeners.install({ waitUntil: (promise) => { installPromise = promise; } });
   await Promise.resolve(installPromise);
 
-  assert.equal(CACHE_NAME, "the-lock-v1");
+  assert.equal(CACHE_NAME, "the-lock-v2");
   assert.match(CACHE_NAME, /^the-lock-v\d+$/);
   assert.deepEqual(urlsToCache, expectedUrls);
   for (const url of criticalRuntimeUrls) {
     assert.ok(urlsToCache.includes(url), `${url} must be precached for offline mode flows`);
   }
-  assert.deepEqual(added, [{ name: "the-lock-v1", urls: expectedUrls }]);
+  assert.deepEqual(added, [{ name: "the-lock-v2", urls: expectedUrls }]);
 });
 
 test("offline: cached assets are served when fetch is offline", async () => {
@@ -258,7 +258,7 @@ test("offline: cached assets are served when fetch is offline", async () => {
 test("offline: older cache versions are cleaned up on activate", async () => {
   const deleted = [];
   const { listeners } = await loadServiceWorker({
-    keys: async () => ["the-lock-v0", "the-lock-v1", "other-cache"],
+    keys: async () => ["the-lock-v0", "the-lock-v1", "the-lock-v2", "other-cache"],
     delete: async (name) => deleted.push(name),
   });
 
@@ -266,7 +266,7 @@ test("offline: older cache versions are cleaned up on activate", async () => {
   listeners.activate({ waitUntil: (promise) => { activatePromise = promise; } });
   await Promise.resolve(activatePromise);
 
-  assert.deepEqual(deleted, ["the-lock-v0", "other-cache"]);
+  assert.deepEqual(deleted, ["the-lock-v0", "the-lock-v1", "other-cache"]);
 });
 
 test("offline: the app boots in a mocked browser environment", async () => {
@@ -275,6 +275,8 @@ test("offline: the app boots in a mocked browser environment", async () => {
     const { TUTORIALS } = await import("../src/levels.js");
     const { registerServiceWorker } = await import(`../src/main.js?offline-${Date.now()}`);
 
+    assert.equal(env.el("mode-select").classList.contains("hidden"), true);
+    env.el("btn-start").click();
     assert.equal(env.el("level-title").textContent, "CHOOSE MODE");
     assert.equal(env.el("mode-select").classList.contains("hidden"), false);
     assert.equal(env.el("board").children.length, 0);
