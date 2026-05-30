@@ -5,12 +5,13 @@ import { minimax } from "./battleSolver.js";
 
 export const BATTLE_MAX_NODES = 24;
 export const BATTLE_MAX_EDGES = 30;
+export const BATTLE_GENERATION_MIN_DIFFICULTY = 4;
 export const BATTLE_GENERATOR_MAX_ATTEMPTS = 50;
 export const BATTLE_SOLVER_MAX_STATES = 250_000;
 export const BATTLE_FIRST_PLAYER_BIAS_THRESHOLD = 0.1;
 
 export const BATTLE_BALANCE_THRESHOLDS = Object.freeze({
-  minDistanceToWin: 7,
+  minDistanceToWin: 5,
   maxDistanceToWin: 25,
   minBranchingFactor: 1.3,
   minCheckingMoves: 1,
@@ -42,6 +43,20 @@ function lockedTargetCandidates(level) {
   return level.edges
     .filter((edge) => edge.id !== level.target && !isLegalFlip(config, edge.id))
     .sort((a, b) => edgeNumber(a.id) - edgeNumber(b.id));
+}
+
+function battleTargetPairs(level) {
+  return lockedTargetCandidates(level).flatMap((candidate) => [
+    { target: level.target, targetB: candidate.id },
+    { target: candidate.id, targetB: level.target },
+  ]);
+}
+
+function decorateBattleTargets(baseLevel, targetPair) {
+  const level = targetPair.target === baseLevel.target
+    ? baseLevel
+    : { ...baseLevel, target: targetPair.target };
+  return decorateBattleLevel(level, targetPair.targetB, { chargesPerEdge: 3 });
 }
 
 function ownerFor(edge, index, target, targetB) {
@@ -169,11 +184,12 @@ function attachDiagnostics(level, diagnostics, evaluation) {
 
 function fallbackBattle(options) {
   const rng = makeRng(options.seed ?? 1);
-  const base = generateLock(1, rng);
+  const difficulty = Math.max(BATTLE_GENERATION_MIN_DIFFICULTY, Math.floor(options.difficulty ?? BATTLE_GENERATION_MIN_DIFFICULTY));
+  const base = generateLock(difficulty, rng);
   const desiredOutcome = options.desiredOutcome ?? desiredBattleOutcome(options.seed ?? 0);
-  const candidates = lockedTargetCandidates(base);
+  const candidates = battleTargetPairs(base);
   for (const candidate of candidates) {
-    const level = decorateBattleLevel(base, candidate.id, { chargesPerEdge: 3 });
+    const level = decorateBattleTargets(base, candidate);
     const evaluation = evaluateBattle(level, { maxStates: options.maxStates });
     if (evaluation.passed && evaluation.outcome === desiredOutcome) return level;
   }
@@ -185,7 +201,7 @@ export function generateBattle(options = {}) {
   const rng = options.rng ?? makeRng(seed);
   const maxAttempts = options.maxAttempts ?? BATTLE_GENERATOR_MAX_ATTEMPTS;
   const maxStates = options.maxStates ?? BATTLE_SOLVER_MAX_STATES;
-  const difficulty = Math.max(1, Math.floor(options.difficulty ?? 1));
+  const difficulty = Math.max(BATTLE_GENERATION_MIN_DIFFICULTY, Math.floor(options.difficulty ?? BATTLE_GENERATION_MIN_DIFFICULTY));
   const targetCandidatesPerBoard = options.targetCandidatesPerBoard ?? 4;
   const desiredOutcome = options.desiredOutcome ?? desiredBattleOutcome(seed);
   const rejections = [];
@@ -198,7 +214,7 @@ export function generateBattle(options = {}) {
       continue;
     }
 
-    const candidates = rotate(lockedTargetCandidates(base), Math.floor(rng() * Math.max(1, base.edges.length)))
+    const candidates = rotate(battleTargetPairs(base), Math.floor(rng() * Math.max(1, base.edges.length)))
       .slice(0, targetCandidatesPerBoard);
     if (candidates.length === 0) {
       rejections.push({ attempt, sourceHead: base.head, reasons: ["no-locked-secondary-target"] });
@@ -206,7 +222,7 @@ export function generateBattle(options = {}) {
     }
 
     for (const candidate of candidates) {
-      const level = decorateBattleLevel(base, candidate.id, { chargesPerEdge: 3 });
+      const level = decorateBattleTargets(base, candidate);
       const evaluation = evaluateBattle(level, { maxStates });
       const scored = { level, evaluation, score: candidateScore(evaluation, desiredOutcome) };
       if (!best || scored.score > best.score) best = scored;
@@ -218,13 +234,13 @@ export function generateBattle(options = {}) {
           rejectionReasons: rejections,
         }, evaluation);
       }
-      rejections.push({ attempt, ...summarizeRejection(base, candidate.id, evaluation, desiredOutcome) });
+      rejections.push({ attempt, ...summarizeRejection(base, candidate.targetB, evaluation, desiredOutcome) });
     }
   }
 
   const fallbackLevel = best?.evaluation?.passed && best.evaluation.outcome === desiredOutcome
     ? best.level
-    : fallbackBattle({ seed, desiredOutcome, maxStates });
+    : fallbackBattle({ seed, desiredOutcome, maxStates, difficulty });
   const fallbackEvaluation = best?.level === fallbackLevel
     ? best.evaluation
     : evaluateBattle(fallbackLevel, { maxStates });

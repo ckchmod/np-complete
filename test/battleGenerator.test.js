@@ -5,6 +5,7 @@ import { makeBattleConfig } from "../src/battleEngine.js";
 import {
   BATTLE_BALANCE_THRESHOLDS,
   BATTLE_FIRST_PLAYER_BIAS_THRESHOLD,
+  BATTLE_GENERATION_MIN_DIFFICULTY,
   BATTLE_MAX_EDGES,
   BATTLE_MAX_NODES,
   decorateBattleLevel,
@@ -33,6 +34,17 @@ test("generated battle boards stay under phone caps and carry battle metadata", 
   assert.ok(Object.values(level.battle.owners).includes("white"));
   assert.ok(Object.values(level.battle.owners).includes("black"));
   assert.ok(Object.values(level.battle.charges).every((charges) => charges === 3));
+});
+
+test("generated battle boards start from the first non-tree generator tier", () => {
+  assert.equal(BATTLE_GENERATION_MIN_DIFFICULTY, 4);
+
+  for (const seed of [12, 21, 32]) {
+    const level = generateBattle({ seed, difficulty: 1 });
+
+    assert.notEqual(level.battle.sourceHead, "single", `seed ${seed} should avoid the plain single-head lock`);
+    assert.equal(level.battle.sourceHead, "cycle", `seed ${seed} should use the first cycle tier`);
+  }
 });
 
 test("generated boards are compatible with makeBattleConfig and minimax", () => {
@@ -89,6 +101,7 @@ test("fallback path remains solver-checked and non-trivial", () => {
   const evaluation = evaluateBattle(level);
 
   assert.equal(level.battle.diagnostics.fallback, true);
+  assert.notEqual(level.battle.sourceHead, "single", "fallback also avoids the plain single-head lock");
   assert.equal(evaluation.partial, false);
   assert.equal(hasFirstMoveWin(level), false);
   assert.ok(evaluation.distanceToWin >= BATTLE_BALANCE_THRESHOLDS.minDistanceToWin);
