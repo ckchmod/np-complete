@@ -15,8 +15,8 @@ Because the >=2 rule is satisfied at *every* moment, "win" is **not** "make the 
 
 Play starts with the intro and six tutorials. After the tutorials, mode selection offers two choices:
 
-- **Puzzle Rush:** endless solver-verified generated locks with move budgets, skips, and three strikes.
-- **Battle:** local hot-seat play for two people on the same device. There is no network play, AI opponent, account system, or persistent Battle profile.
+- **Puzzle Rush:** endless solver-verified generated locks with move budgets, skips, and three strikes. When the run ends, you can copy the result, play again, or return to mode selection.
+- **Battle:** local hot-seat play for two people on the same device. After a win, you can replay Battle or return to mode selection. There is no network play, AI opponent, account system, or persistent Battle profile.
 
 ## Battle rules
 
@@ -46,7 +46,7 @@ That problem is **PSPACE-complete** for the infinite family of NCL instances. In
 Each Rush lock is generated live in the browser and verified by the solver before you see it:
 
 - The red target points into a root node that can only be reversed once it gains enough inflow.
-- Earlier boards use relay and AND/OR patterns to teach the core logic.
+- Earlier boards use relay and AND/OR patterns to teach the core logic, then introduce a compact cycle head so the progression does not stay purely tree-shaped.
 - Higher tiers can draw from richer gadget families such as latch, battery, mutex, cycle-pump, shared-reservoir, and shuttle-style patterns.
 - Difficulty metrics report things like reachable states, diameter, branching, par, and other search properties. The generator uses solver checks so each accepted board is solvable and has a true shortest solution length.
 
@@ -64,6 +64,10 @@ python3 -m http.server 8000
 
 Then open <http://localhost:8000>.
 
+### GitHub Pages
+
+The repository includes a Pages workflow at `.github/workflows/pages.yml`. Pushes to `main` or `feature/ncl-deepening-battle` upload the static repo root and deploy it with GitHub Pages, so the published view updates from the current branch contents without a build step.
+
 ### Test on your phone (same Wi-Fi)
 
 Find your computer's LAN IP and open `http://<that-ip>:8000` on the phone:
@@ -78,7 +82,7 @@ hostname -I
 ## Tests
 
 ```bash
-npm test           # node --test, 114 tests across engine, solver, levels, metrics, generator, Rush, Battle, render, and main flow
+npm test           # node --test, 117 tests across engine, solver, levels, metrics, generator, Rush, Battle, render, and main flow
 npm run gates      # prints the solver gates (THE LOCK + tutorials) as JSON
 ```
 
