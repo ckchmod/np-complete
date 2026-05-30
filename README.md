@@ -66,7 +66,7 @@ Then open <http://localhost:8000>.
 
 ### GitHub Pages
 
-The repository includes a Pages workflow at `.github/workflows/pages.yml`. Pushes to `main` or `feature/ncl-deepening-battle` upload the static repo root and deploy it with GitHub Pages, so the published view updates from the current branch contents without a build step.
+The repository includes a Pages workflow at `.github/workflows/pages.yml`. Pushes to `main` upload the static repo root and deploy it with GitHub Pages, so the published view updates from the current branch contents without a build step.
 
 ### Test on your phone (same Wi-Fi)
 

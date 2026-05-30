@@ -8,7 +8,7 @@ This milestone addresses three MVP issues: terminal game flow, GitHub Pages depl
 
 - Rush run-over now keeps the existing result card but adds a mode-selection escape hatch.
 - Battle terminal state remains inline with the board and adds replay/mode-selection actions, avoiding a new screen system.
-- GitHub Pages deploys through `.github/workflows/pages.yml`; this milestone branch and `main` both trigger the static root deploy, with no build step.
+- GitHub Pages deploys through `.github/workflows/pages.yml`; `main` triggers the static root deploy, with no build step; the feature branch stays ready for that deploy once merged because repository environment protection blocks direct feature-branch Pages deploys.
 - Rush generation keeps early readability but introduces a compact cycle head before high-tier gadgets so early progression is no longer purely tree-shaped. High tiers keep richer gadget families without duplicating the low-par cycle head.
 
 ## Verification contract
