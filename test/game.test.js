@@ -47,16 +47,22 @@ function fakeEl() {
     },
     setAttribute() {},
     appendChild(child) {
+      child.parentNode = el;
       children.push(child);
       return child;
     },
     removeChild(child) {
       const i = children.indexOf(child);
       if (i >= 0) children.splice(i, 1);
+      if (child.parentNode === el) child.parentNode = null;
       return child;
     },
     addEventListener(type, fn) {
       (listeners[type] ||= []).push(fn);
+    },
+    removeEventListener(type, fn) {
+      if (!listeners[type]) return;
+      listeners[type] = listeners[type].filter((listener) => listener !== fn);
     },
     dispatch(type, ev) {
       (listeners[type] || []).forEach((fn) => fn(ev || {}));
@@ -98,7 +104,7 @@ async function withEnv(fn) {
     performance: globalThis.performance,
     requestAnimationFrame: globalThis.requestAnimationFrame,
   };
-  globalThis.document = { createElementNS: () => fakeEl() };
+  globalThis.document = { createElement: () => fakeEl(), createElementNS: () => fakeEl() };
   globalThis.localStorage = fakeLocalStorage();
   globalThis.performance = { now: () => 0 };
   globalThis.requestAnimationFrame = () => 0; // never run animation frames
@@ -115,9 +121,25 @@ async function withEnv(fn) {
 
 const progressKey = (levelId) => "the-lock:" + levelId + ":progress";
 
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 // tut-1 is a 1-move solve whose only winning tap is the target edge; ideal for
 // deterministic win assertions.
 const tut1 = TUTORIALS.find((l) => l.id === "tut-1");
+const tut3 = TUTORIALS.find((l) => l.id === "tut-3");
+
+function testPathHash(moveIds) {
+  const str = moveIds.join(",");
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+    h >>>= 0;
+  }
+  const hi = ((h >>> 16) & 0xffff).toString(16).toUpperCase().padStart(4, "0");
+  const lo = (h & 0xffff).toString(16).toUpperCase().padStart(4, "0");
+  return hi + "-" + lo;
+}
 
 // Walk the fake SVG tree to find the hit <line> for a given edge id. render.js
 // builds: svg > g.edge-layer > g.edge-group[dataset.edge] > [line, arrow, hit],
@@ -190,6 +212,104 @@ test("game: a win after resume counts resumed moves + this-session moves", async
         resolve();
       }, 950);
     });
+  });
+});
+
+test("game: a resumed solve keeps the full route hash across sessions", async () => {
+  await withEnv((createGame) => {
+    const firstMount = fakeMount();
+    const firstGame = createGame({ level: tut3, mountEl: firstMount, onWin: () => {} });
+    findEdgeHit(firstMount.querySelector("#board"), "e3").dispatch("click");
+    firstGame.destroy();
+
+    const secondMount = fakeMount();
+    const game = createGame({ level: tut3, mountEl: secondMount, onWin: () => {} });
+    assert.equal(secondMount.querySelector("#move-count").textContent, 1, "resume starts from the saved first move");
+
+    findEdgeHit(secondMount.querySelector("#board"), tut3.target).dispatch("click");
+
+    assert.match(
+      game.shareResult(),
+      new RegExp("#" + testPathHash(["e3", tut3.target]) + "$"),
+      "share hash covers both the restored prefix and the finishing move"
+    );
+    game.destroy();
+  });
+});
+
+test("game: a resumed solve opens replay with the restored prefix", async () => {
+  await withEnv(async (createGame) => {
+    const firstMount = fakeMount();
+    const firstGame = createGame({ level: tut3, mountEl: firstMount, onWin: () => {} });
+    findEdgeHit(firstMount.querySelector("#board"), "e3").dispatch("click");
+    firstGame.destroy();
+
+    let replayStarted = false;
+    let win = null;
+    const secondMount = fakeMount();
+    const game = createGame({
+      level: tut3,
+      mountEl: secondMount,
+      onWin: (payload) => (win = payload),
+      onReplayStart: () => (replayStarted = true),
+    });
+
+    findEdgeHit(secondMount.querySelector("#board"), tut3.target).dispatch("click");
+    await delay(950);
+
+    assert.ok(win, "win callback fires after the delayed result card render");
+    const replayRoot = secondMount.querySelector("#replay-ui").children[0];
+    const replayButton = replayRoot.children[0];
+    const controls = replayRoot.children[1];
+    const stepButton = controls.children[2];
+    const progress = controls.children[4];
+
+    assert.equal(progress.textContent, "0 / 2", "replay has both the restored prefix and finishing move");
+    replayButton.dispatch("click");
+    await Promise.resolve();
+    assert.equal(replayStarted, true, "opening replay resets the board before stepping frames");
+    stepButton.dispatch("click");
+    await Promise.resolve();
+    assert.equal(progress.textContent, "1 / 2", "first replay step is the restored prefix move");
+    stepButton.dispatch("click");
+    await Promise.resolve();
+    assert.equal(progress.textContent, "2 / 2", "second replay step is the finishing move");
+
+    game.destroy();
+  });
+});
+
+test("game: corrupt saved history falls back to restored-state replay", async () => {
+  await withEnv(async (createGame) => {
+    const firstMount = fakeMount();
+    const firstGame = createGame({ level: tut3, mountEl: firstMount, onWin: () => {} });
+    findEdgeHit(firstMount.querySelector("#board"), "e3").dispatch("click");
+    firstGame.destroy();
+
+    const saved = JSON.parse(localStorage.getItem(progressKey("tut-3")));
+    saved.history = ["e1"];
+    localStorage.setItem(progressKey("tut-3"), JSON.stringify(saved));
+
+    let win = null;
+    const secondMount = fakeMount();
+    const game = createGame({ level: tut3, mountEl: secondMount, onWin: (payload) => (win = payload) });
+    assert.equal(secondMount.querySelector("#move-count").textContent, 1, "corrupt-history resume keeps the saved move count");
+
+    findEdgeHit(secondMount.querySelector("#board"), tut3.target).dispatch("click");
+    await delay(950);
+
+    assert.ok(win, "win still completes when saved history is corrupt");
+    assert.match(
+      game.shareResult(),
+      new RegExp("#" + testPathHash([tut3.target]) + "$"),
+      "untrusted saved history is not used for the route hash"
+    );
+    const replayRoot = secondMount.querySelector("#replay-ui").children[0];
+    const controls = replayRoot.children[1];
+    const progress = controls.children[4];
+    assert.equal(progress.textContent, "0 / 1", "replay starts from restored state when saved route cannot be trusted");
+
+    game.destroy();
   });
 });
 

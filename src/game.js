@@ -22,11 +22,11 @@ function storageKey(levelId, suffix) {
 // needed so a resumed session reports an accurate move total — par/stars/score
 // on a later win are computed against it (spec §11); restoring orientation alone
 // would leave the counter at 0 and silently undercount the solve.
-function saveProgress(levelId, dirs, moves) {
+function saveProgress(levelId, dirs, moves, history = null) {
   try {
     localStorage.setItem(
       storageKey(levelId, "progress"),
-      JSON.stringify({ dirs: Object.fromEntries(dirs), moves })
+      JSON.stringify({ dirs: Object.fromEntries(dirs), moves, history })
     );
   } catch (_) {}
 }
@@ -39,7 +39,10 @@ function loadProgress(levelId) {
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || !parsed.dirs) return null;
     const moves = Number.isInteger(parsed.moves) && parsed.moves >= 0 ? parsed.moves : 0;
-    return { dirs: new Map(Object.entries(parsed.dirs)), moves };
+    const history = Array.isArray(parsed.history) && parsed.history.every((edgeId) => typeof edgeId === "string")
+      ? parsed.history.slice()
+      : null;
+    return { dirs: new Map(Object.entries(parsed.dirs)), moves, history };
   } catch (_) {
     return null;
   }
@@ -74,6 +77,24 @@ function restoreConfig(startConfig, savedDirs) {
     if (inflow(candidate, node.id) < 2) return null;
   }
   return candidate;
+}
+
+function sameDirs(left, right) {
+  if (left.size !== right.size) return false;
+  for (const [edgeId, dir] of left) {
+    if (right.get(edgeId) !== dir) return false;
+  }
+  return true;
+}
+
+function restoreHistory(startConfig, restoredConfig, history, moves) {
+  if (!history || history.length !== moves) return null;
+  let replayConfig = startConfig;
+  for (const edgeId of history) {
+    if (!replayConfig.edgeById.has(edgeId) || !isLegalFlip(replayConfig, edgeId)) return null;
+    replayConfig = applyFlip(replayConfig, edgeId);
+  }
+  return sameDirs(replayConfig.dirs, restoredConfig.dirs) ? history.slice() : null;
 }
 
 function loadBest(levelId) {
@@ -164,8 +185,12 @@ export function createGame({ level, mountEl, onWin, onReplayStart }) {
   // State
   const startConfig = makeConfig(level);
   let config = startConfig;
-  let moveHistory = []; // edgeIds tapped THIS session (undo stack + path hash source)
+  let moveHistory = [];
   let priorMoves = 0; // moves made before a resume; undo history is session-only (spec §10)
+  let routeHistory = [];
+  let replayBaseConfig = startConfig;
+  let activeReplayBaseConfig = startConfig;
+  let replayMoveOffset = 0;
   let undoCount = 0;
   let startTime = Date.now();
   let won = false;
@@ -174,10 +199,6 @@ export function createGame({ level, mountEl, onWin, onReplayStart }) {
   let finalShareString = "";
   let replayUI = null;
 
-  // Total moves counted toward the solve = moves restored on resume + this
-  // session's moves. The path hash only ever hashes this session's ids, so it
-  // stays honest; a resumed game keeps an accurate count but cannot reconstruct
-  // (or spoof) the full route.
   function moveCount() {
     return priorMoves + moveHistory.length;
   }
@@ -201,6 +222,11 @@ export function createGame({ level, mountEl, onWin, onReplayStart }) {
     if (restored && !isSolved(restored)) {
       config = restored;
       priorMoves = saved.moves;
+      routeHistory = restoreHistory(startConfig, restored, saved.history, saved.moves);
+      if (!routeHistory) {
+        replayBaseConfig = restored;
+        replayMoveOffset = saved.moves;
+      }
     } else {
       clearProgress(level.id);
     }
@@ -214,7 +240,7 @@ export function createGame({ level, mountEl, onWin, onReplayStart }) {
       mountEl: replayMount,
       onReplayStart: () => {
         if (onReplayStart) onReplayStart();
-        config = startConfig;
+        config = activeReplayBaseConfig;
         board.clearWin();
         board.update(config);
         board.markLegal(legalFlips(config));
@@ -255,12 +281,13 @@ export function createGame({ level, mountEl, onWin, onReplayStart }) {
 
     const next = applyFlip(config, edgeId);
     moveHistory.push(edgeId);
+    if (routeHistory) routeHistory.push(edgeId);
     config = next;
 
     board.update(config);
     refreshLegal();
     updateHUD();
-    saveProgress(level.id, config.dirs, moveCount());
+    saveProgress(level.id, config.dirs, moveCount(), routeHistory);
 
     if (isSolved(config)) {
       handleWin();
@@ -277,7 +304,11 @@ export function createGame({ level, mountEl, onWin, onReplayStart }) {
     const moves = moveCount();
     const score = computeScore(moves, level.par, elapsed, undoCount);
     const stars = computeStars(moves, level.par);
-    const hash = pathHash(moveHistory);
+    const replayMoveIds = routeHistory || moveHistory;
+    const replayBase = routeHistory ? startConfig : replayBaseConfig;
+    const replayOffset = routeHistory ? 0 : replayMoveOffset;
+    const hash = pathHash(replayMoveIds);
+    activeReplayBaseConfig = replayBase;
 
     finalShareString =
       "THE LOCK\n" +
@@ -315,11 +346,11 @@ export function createGame({ level, mountEl, onWin, onReplayStart }) {
       }
       if (replayUI) {
         replayUI.show({
-          frames: replayFrames(moveHistory),
+          frames: replayFrames(replayMoveIds, replayBase, replayOffset),
           analysis: {
             moveCount: moves,
             par: level.par,
-            targetLegalMoment: targetLegalMoment(moveHistory),
+            targetLegalMoment: targetLegalMoment(replayMoveIds, replayBase, replayOffset),
           },
         });
       }
@@ -332,12 +363,13 @@ export function createGame({ level, mountEl, onWin, onReplayStart }) {
   function undo() {
     if (won || moveHistory.length === 0) return;
     const last = moveHistory.pop();
+    if (routeHistory) routeHistory.pop();
     undoCount++;
     config = applyFlip(config, last); // involutive
     board.update(config);
     refreshLegal();
     updateHUD();
-    saveProgress(level.id, config.dirs, moveCount());
+    saveProgress(level.id, config.dirs, moveCount(), routeHistory);
   }
 
   // ── Reset ────────────────────────────────────────────────────────────────────
@@ -353,7 +385,11 @@ export function createGame({ level, mountEl, onWin, onReplayStart }) {
       won = false;
     }
     moveHistory = [];
+    routeHistory = [];
     priorMoves = 0;
+    replayBaseConfig = startConfig;
+    activeReplayBaseConfig = startConfig;
+    replayMoveOffset = 0;
     undoCount = 0;
     startTime = Date.now();
     config = startConfig;
@@ -392,26 +428,26 @@ export function createGame({ level, mountEl, onWin, onReplayStart }) {
     return finalShareString;
   }
 
-  function replayFrames(edgeIds) {
-    let replayConfig = startConfig;
+  function replayFrames(edgeIds, baseConfig = startConfig, moveOffset = 0) {
+    let replayConfig = baseConfig;
     return edgeIds.map((edgeId, moveIndex) => {
       replayConfig = applyFlip(replayConfig, edgeId);
       return {
         config: replayConfig,
-        moveIndex,
+        moveIndex: moveOffset + moveIndex,
         moveId: edgeId,
         isLast: moveIndex === edgeIds.length - 1,
       };
     });
   }
 
-  function targetLegalMoment(edgeIds) {
-    let replayConfig = startConfig;
-    if (isLegalFlip(replayConfig, level.target)) return 0;
+  function targetLegalMoment(edgeIds, baseConfig = startConfig, moveOffset = 0) {
+    let replayConfig = baseConfig;
+    if (isLegalFlip(replayConfig, level.target)) return moveOffset;
     for (let i = 0; i < edgeIds.length; i++) {
-      if (edgeIds[i] === level.target && isLegalFlip(replayConfig, level.target)) return i;
+      if (edgeIds[i] === level.target && isLegalFlip(replayConfig, level.target)) return moveOffset + i;
       replayConfig = applyFlip(replayConfig, edgeIds[i]);
-      if (i < edgeIds.length - 1 && isLegalFlip(replayConfig, level.target)) return i + 1;
+      if (i < edgeIds.length - 1 && isLegalFlip(replayConfig, level.target)) return moveOffset + i + 1;
     }
     return null;
   }
