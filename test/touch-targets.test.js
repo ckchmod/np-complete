@@ -43,3 +43,11 @@ test("touch targets: edge hit corridors stay wide and clickable", async () => {
   assert.match(ruleBody(css, ".edge-hit"), /stroke-width:\s*44;/);
   assert.match(ruleBody(css, ".edge-hit"), /pointer-events:\s*stroke;/);
 });
+
+test("touch targets: keyboard-focused edges have a visible focus cue", async () => {
+  const css = await readFile(cssUrl, "utf8");
+
+  assert.match(ruleBody(css, ".edge-group:focus-within"), /drop-shadow\(0 0 7px var\(--c-legal\)\)/);
+  assert.match(ruleBody(css, ".edge-group:focus-within .edge-line"), /stroke:\s*var\(--c-legal\);/);
+  assert.match(ruleBody(css, ".edge-group:focus-within .edge-arrow"), /fill:\s*var\(--c-legal\);/);
+});

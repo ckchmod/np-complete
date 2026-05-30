@@ -304,6 +304,18 @@ body {
   touch-action: manipulation;
 }
 
+.edge-group:focus-within {
+  filter: drop-shadow(0 0 7px var(--c-legal));
+}
+
+.edge-group:focus-within .edge-line {
+  stroke: var(--c-legal);
+}
+
+.edge-group:focus-within .edge-arrow {
+  fill: var(--c-legal);
+}
+
 /* Weight variants */
 .edge-group.is-thick .edge-line  { stroke-width: 3.2; }
 .edge-group.is-thin  .edge-line  { stroke-width: 1.1; }

@@ -188,6 +188,18 @@ function battleCharges(config, edgeId) {
   return config.charges.get(edgeId) ?? 0;
 }
 
+function edgeControlLabel(config, edge) {
+  const parts = [`Flip ${edge.w === 2 ? "thick" : "thin"} edge ${edge.id}`];
+  if (config.level.target === edge.id) parts.push("target");
+  if (config.level.targetB === edge.id) parts.push("black target");
+  if (isBattleConfig(config)) {
+    const owner = battleOwner(config, edge.id);
+    parts.push(owner === "neutral" ? "neutral" : `${owner} owned`);
+    parts.push(`${battleCharges(config, edge.id)} charges`);
+  }
+  return parts.join(", ");
+}
+
 function applyBattleEdgeState(config, edgeViews) {
   if (!isBattleConfig(config)) return;
   for (const [edgeId, view] of edgeViews) {
@@ -202,6 +214,7 @@ function applyBattleEdgeState(config, edgeViews) {
     view.group.classList.toggle("is-opponent", owner !== "neutral" && owner !== config.turn);
     view.group.classList.toggle("is-spent", charges === 0);
     if (view.chargeText) view.chargeText.textContent = String(charges);
+    view.hit.setAttribute("aria-label", edgeControlLabel(config, view.edge));
   }
 }
 
@@ -291,7 +304,13 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
 
     const line = el("path", { class: "edge-line", d: linePath(curve, toEnd, dim.len) });
     const arrow = el("path", { class: "edge-arrow", d: arrowPathFor(curve, toEnd, dim.len, dim.half) });
-    const hit = el("path", { class: "edge-hit", d: curvePath(curve) });
+    const hit = el("path", {
+      class: "edge-hit",
+      d: curvePath(curve),
+      role: "button",
+      tabindex: "0",
+      "aria-label": edgeControlLabel(config, edge),
+    });
 
     if (config.level.target === edge.id) {
       // Ghost marker: a faint DASHED RING around the GOAL node (the end the target
@@ -359,6 +378,11 @@ export function createBoard(svgEl, config, { onEdgeTap } = {}) {
     );
     target.addEventListener("click", () => {
       if (touched) return;
+      handler();
+    });
+    target.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
       handler();
     });
   }

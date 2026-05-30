@@ -135,6 +135,26 @@ test("render: classic boards keep the existing edge contract without battle over
   });
 });
 
+test("render: edge hit targets expose button semantics and keyboard activation", async () => {
+  await withSvgEnv(() => {
+    const svg = fakeEl("svg");
+    let tapped = null;
+    createBoard(svg, makeConfig(TUTORIALS[0]), { onEdgeTap: (edgeId) => { tapped = edgeId; } });
+
+    const edge = findEdge(svg, TUTORIALS[0].target);
+    const hit = findClass(edge, "edge-hit")[0];
+    let prevented = false;
+
+    assert.equal(hit.attrs.role, "button");
+    assert.equal(hit.attrs.tabindex, "0");
+    assert.match(hit.attrs["aria-label"], /target/);
+
+    hit.dispatch("keydown", { key: "Enter", preventDefault: () => { prevented = true; } });
+    assert.equal(prevented, true, "keyboard activation prevents page scroll/default action");
+    assert.equal(tapped, TUTORIALS[0].target);
+  });
+});
+
 test("render: battle boards emit owner classes, charge attributes, and badges", async () => {
   await withSvgEnv(() => {
     const svg = fakeEl("svg");
@@ -170,8 +190,10 @@ test("render: update refreshes turn ownership and charge labels", async () => {
 
     const flipped = findEdge(svg, "s");
     const black = findEdge(svg, "rb");
+    const flippedHit = findClass(flipped, "edge-hit")[0];
     assert.equal(svg.dataset.turn, "black");
     assert.equal(flipped.dataset.charge, "2");
+    assert.match(flippedHit.attrs["aria-label"], /2 charges/);
     assert.equal(findClass(flipped, "edge-charge-text")[0].textContent, "2");
     assert.equal(flipped.classList.contains("is-opponent"), true);
     assert.equal(flipped.classList.contains("is-current-owner"), false);
