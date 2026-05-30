@@ -28,8 +28,13 @@ const btnRushStart = document.getElementById("btn-rush-start");
 const battleIntro = document.getElementById("battle-intro");
 const btnBattleClose = document.getElementById("btn-battle-close");
 const modeSelect = document.getElementById("mode-select");
+const btnTutorialMode = document.getElementById("tutorial-mode-button");
 const btnRushMode = document.getElementById("rush-mode-button");
 const btnBattleMode = document.getElementById("battle-mode-button");
+const btnBattleAIMode = document.getElementById("battle-ai-mode-button");
+const btnTutorialMenu = document.getElementById("btn-tutorial-menu");
+const btnRushAbandon = document.getElementById("btn-rush-abandon");
+const btnBattleAbandon = document.getElementById("btn-battle-abandon");
 const battleBoard = document.getElementById("battle-board");
 const battleTurn = document.getElementById("battle-turn");
 const battleStatus = document.getElementById("battle-status");
@@ -42,6 +47,7 @@ let currentIndex = 0;
 let currentGame = null;
 let rush = null;
 let battle = null;
+let lastBattleVsAI = false;
 let lastShare = "";
 let handoffTimer = null; // the 1400ms post-win handoff timer (cleared on any navigation)
 
@@ -90,6 +96,7 @@ function loadTutorial(level) {
         else showModeSelect(); // last tutorial cleared → player chooses Rush or Battle
       }, 1400);
     },
+    onReplayStart: clearHandoff,
   });
 }
 
@@ -97,6 +104,16 @@ function loadTutorial(level) {
 // ── Mode selection ─────────────────────────────────────────────────────────────
 function hideModeSelect() {
   if (modeSelect) modeSelect.classList.add("hidden");
+}
+
+function hideTerminalSurfaces() {
+  hideResultCard();
+  if (rushIntro) rushIntro.classList.add("hidden");
+  if (battleIntro) battleIntro.classList.add("hidden");
+  if (rushOver) { rushOver.classList.remove("visible"); rushOver.classList.add("hidden"); }
+  if (battleResultMessage) battleResultMessage.textContent = "";
+  if (battleStatus) battleStatus.textContent = "";
+  if (battleResult) battleResult.classList.add("hidden");
 }
 
 function destroyRush() {
@@ -109,15 +126,10 @@ function destroyBattle() {
 
 function showModeSelect() {
   clearHandoff();
-  hideResultCard();
   if (currentGame) { currentGame.destroy(); currentGame = null; }
   destroyRush();
   destroyBattle();
-  if (rushIntro) rushIntro.classList.add("hidden");
-  if (battleIntro) battleIntro.classList.add("hidden");
-  if (rushOver) { rushOver.classList.remove("visible"); rushOver.classList.add("hidden"); }
-  if (battleResultMessage) battleResultMessage.textContent = "";
-  if (battleResult) battleResult.classList.add("hidden");
+  hideTerminalSurfaces();
   mountEl.classList.remove("mode-rush", "mode-battle");
   if (titleEl) titleEl.textContent = "CHOOSE MODE";
   if (hintEl) hintEl.textContent = "Pick a way through the lock.";
@@ -125,28 +137,36 @@ function showModeSelect() {
   else showRushRules(true);
 }
 
-function enterBattle() {
+function enterTutorial() {
+  clearHandoff();
+  destroyRush();
+  destroyBattle();
+  hideTerminalSurfaces();
+  currentIndex = 0;
+  loadTutorial(TUTORIALS[currentIndex]);
+}
+
+function enterBattle({ vsAI = false } = {}) {
   clearHandoff();
   if (currentGame) { currentGame.destroy(); currentGame = null; }
   destroyRush();
   destroyBattle();
   markTutorialsDone();
-  hideResultCard();
+  hideTerminalSurfaces();
   hideModeSelect();
-  if (rushIntro) rushIntro.classList.add("hidden");
-  if (battleIntro) battleIntro.classList.add("hidden");
-  if (rushOver) { rushOver.classList.remove("visible"); rushOver.classList.add("hidden"); }
-  if (battleResultMessage) battleResultMessage.textContent = "";
-  if (battleResult) battleResult.classList.add("hidden");
+  lastBattleVsAI = vsAI;
   mountEl.classList.remove("mode-rush");
   mountEl.classList.add("mode-battle");
-  if (titleEl) titleEl.textContent = "BATTLE";
-  if (hintEl) hintEl.textContent = "White moves first. Reverse your target before you run out of legal moves.";
+  if (titleEl) titleEl.textContent = vsAI ? "BATTLE VS AI" : "BATTLE";
+  if (hintEl) hintEl.textContent = vsAI
+    ? "White moves first. Black is AI-controlled and moves after a short think."
+    : "White moves first. Reverse your target before you run out of legal moves.";
   const seed = (Math.floor(Math.random() * 0x7fffffff)) >>> 0;
   battle = createBattle({
     mountEl,
     refs: { boardEl: battleBoard, turnEl: battleTurn, statusEl: battleStatus },
     seed,
+    vsAI,
     onTerminal({ message }) {
       if (battleResultMessage) battleResultMessage.textContent = message;
       if (battleResult) battleResult.classList.remove("hidden");
@@ -162,9 +182,7 @@ function enterRush() {
   destroyRush();
   destroyBattle();
   markTutorialsDone();
-  hideResultCard();
-  if (rushOver) { rushOver.classList.remove("visible"); rushOver.classList.add("hidden"); }
-  if (battleIntro) battleIntro.classList.add("hidden");
+  hideTerminalSurfaces();
   hideModeSelect();
   mountEl.classList.remove("mode-battle");
   mountEl.classList.add("mode-rush");
@@ -248,10 +266,15 @@ const btnRushMenu = document.getElementById("btn-rush-menu");
 const btnRushShare = document.getElementById("btn-rush-share");
 if (btnRushAgain) btnRushAgain.addEventListener("click", enterRush);
 if (btnRushMenu) btnRushMenu.addEventListener("click", showModeSelect);
-if (btnBattleAgain) btnBattleAgain.addEventListener("click", enterBattle);
+if (btnRushAbandon) btnRushAbandon.addEventListener("click", showModeSelect);
+if (btnBattleAgain) btnBattleAgain.addEventListener("click", () => enterBattle({ vsAI: lastBattleVsAI }));
 if (btnBattleMenu) btnBattleMenu.addEventListener("click", showModeSelect);
+if (btnBattleAbandon) btnBattleAbandon.addEventListener("click", showModeSelect);
+if (btnTutorialMenu) btnTutorialMenu.addEventListener("click", showModeSelect);
+if (btnTutorialMode) btnTutorialMode.addEventListener("click", enterTutorial);
 if (btnRushMode) btnRushMode.addEventListener("click", enterRush);
-if (btnBattleMode) btnBattleMode.addEventListener("click", enterBattle);
+if (btnBattleMode) btnBattleMode.addEventListener("click", () => enterBattle({ vsAI: false }));
+if (btnBattleAIMode) btnBattleAIMode.addEventListener("click", () => enterBattle({ vsAI: true }));
 if (btnRushShare) btnRushShare.addEventListener("click", () => {
   if (navigator.clipboard && lastShare) navigator.clipboard.writeText(lastShare).catch(() => {});
   const o = btnRushShare.textContent;
@@ -266,11 +289,12 @@ function showIntro() { if (introEl) introEl.classList.remove("hidden"); }
 if (btnStart) btnStart.addEventListener("click", () => {
   try { localStorage.setItem(STORAGE_INTRO_SEEN, "1"); } catch (_) {}
   hideIntro();
+  showModeSelect();
 });
 if (btnSkipTutorial) btnSkipTutorial.addEventListener("click", () => {
   try { localStorage.setItem(STORAGE_INTRO_SEEN, "1"); } catch (_) {}
   hideIntro();
-  showModeSelect(); // skip the tutorials, but still choose a mode first
+  enterTutorial();
 });
 // Help is context-aware: the Rush rules during a run, the how-to-play intro
 // during the tutorials.
@@ -282,6 +306,41 @@ if (btnHelp) btnHelp.addEventListener("click", () => {
 });
 try { if (localStorage.getItem(STORAGE_INTRO_SEEN)) hideIntro(); } catch (_) {}
 
+export function showServiceWorkerUpdateAvailable(doc = globalThis.document) {
+  const root = doc?.body || doc?.getElementById?.("app");
+  if (!root || !doc?.createElement || doc.getElementById?.("sw-update")) return null;
+
+  const notice = doc.createElement("div");
+  notice.id = "sw-update";
+  notice.setAttribute("role", "status");
+  notice.setAttribute("aria-live", "polite");
+  notice.textContent = "Update available. Reload to update.";
+  root.appendChild(notice);
+  return notice;
+}
+
+export async function registerServiceWorker(nav = globalThis.navigator, doc = globalThis.document) {
+  if (!nav || !("serviceWorker" in nav)) return null;
+
+  try {
+    const registration = await nav.serviceWorker.register("sw.js");
+    if (registration.waiting) showServiceWorkerUpdateAvailable(doc);
+    registration.addEventListener?.("updatefound", () => {
+      const worker = registration.installing;
+      if (!worker) return;
+
+      worker.addEventListener("statechange", () => {
+        if (worker.state === "installed" && nav.serviceWorker.controller) {
+          showServiceWorkerUpdateAvailable(doc);
+        }
+      });
+    });
+    return registration;
+  } catch (_) {
+    return null;
+  }
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
-// Always open on the tutorials (behind the intro). "Skip to Rush" jumps ahead.
-goTo(0);
+showModeSelect();
+registerServiceWorker();

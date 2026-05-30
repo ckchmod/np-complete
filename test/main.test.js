@@ -92,12 +92,12 @@ function installEnv() {
   const ids = [
     "app", "level-title", "level-hint", "nav-prev", "nav-next", "nav-skip", "nav-label",
     "intro", "btn-start", "btn-skip-tutorial", "btn-help", "rush-over", "rush-intro",
-    "btn-rush-start", "battle-intro", "btn-battle-close", "mode-select", "rush-mode-button", "battle-mode-button", "battle-board",
+    "btn-rush-start", "battle-intro", "btn-battle-close", "mode-select", "tutorial-mode-button", "rush-mode-button", "battle-mode-button", "battle-ai-mode-button", "battle-board",
     "battle-turn", "battle-status", "battle-result", "board", "rush-score", "rush-strikes",
-    "rush-moves", "btn-skip", "rush-toast", "move-count", "par-display", "result-card",
+    "rush-moves", "btn-skip", "btn-rush-abandon", "rush-toast", "move-count", "par-display", "result-card",
     "result-moves", "result-par", "result-stars", "result-score", "result-pb", "result-hash",
-    "btn-share", "btn-undo", "btn-reset", "rush-final-score", "rush-best", "rush-stats",
-    "btn-rush-again", "btn-rush-share", "btn-rush-menu", "battle-result-message", "btn-battle-again", "btn-battle-menu"
+    "btn-share", "btn-undo", "btn-reset", "btn-tutorial-menu", "rush-final-score", "rush-best", "rush-stats",
+    "btn-rush-again", "btn-rush-share", "btn-rush-menu", "battle-result-message", "btn-battle-again", "btn-battle-menu", "btn-battle-abandon"
   ];
   for (const id of ids) elements.set(id, fakeEl(id));
   for (const id of ["rush-over", "rush-intro", "battle-intro", "mode-select", "battle-result", "result-card"]) {
@@ -138,16 +138,24 @@ function installEnv() {
   };
 }
 
-test("main: mode selection appears and launches Rush and Battle paths", async () => {
+test("main: mode menu is the hub and launches Tutorial, Rush, and Battle paths", async () => {
   const env = installEnv();
   try {
     const { TUTORIALS } = await import("../src/levels.js");
-    await import(`../src/main.js?mode-selection-${Date.now()}`);
+    await import(`../src/main.js?mode-hub-${Date.now()}`);
 
-    for (let step = 0; step < TUTORIALS.length; step++) env.el("nav-next").click();
-
-    assert.equal(env.el("mode-select").classList.contains("hidden"), false, "mode selection is shown after the tutorial sequence");
+    assert.equal(env.el("mode-select").classList.contains("hidden"), false, "mode selection is shown on app load");
     assert.equal(env.el("level-title").textContent, "CHOOSE MODE");
+    assert.equal(env.el("board").children.length, 0, "tutorial board is not auto-forced behind the menu");
+
+    env.el("tutorial-mode-button").click();
+    assert.equal(env.el("mode-select").classList.contains("hidden"), true, "mode selection hides after Tutorial choice");
+    assert.equal(env.el("level-title").textContent, TUTORIALS[0].name);
+    assert.equal(env.el("nav-label").textContent, "1 / " + TUTORIALS.length);
+    assert.ok(env.el("board").children.length > 0, "Tutorial renders into the existing #board ref");
+
+    env.el("btn-tutorial-menu").click();
+    assert.equal(env.el("mode-select").classList.contains("hidden"), false, "Tutorial Main Menu returns to mode selection");
 
     env.el("rush-mode-button").click();
     assert.equal(env.el("app").classList.contains("mode-rush"), true, "Rush mode class is active");
@@ -170,17 +178,16 @@ test("main: mode selection appears and launches Rush and Battle paths", async ()
 test("main: help button routes to Battle rules and preserves other help flows", async () => {
   const env = installEnv();
   try {
-    const { TUTORIALS } = await import("../src/levels.js");
     await import(`../src/main.js?battle-help-${Date.now()}`);
 
     env.el("btn-start").click();
+    env.el("tutorial-mode-button").click();
     env.el("btn-help").click();
     assert.equal(env.el("intro").classList.contains("hidden"), false, "tutorial help still opens the original intro overlay");
     assert.equal(env.el("rush-intro").classList.contains("hidden"), true, "tutorial help does not open Rush rules");
     assert.equal(env.el("battle-intro").classList.contains("hidden"), true, "tutorial help does not open Battle rules");
     env.el("btn-start").click();
 
-    for (let step = 0; step < TUTORIALS.length; step++) env.el("nav-next").click();
     env.el("battle-mode-button").click();
     env.el("btn-help").click();
     assert.equal(env.el("battle-intro").classList.contains("hidden"), false, "Battle help opens the Battle rules overlay");
@@ -210,13 +217,23 @@ test("index: Battle rules copy covers the required short rules", async () => {
   assert.match(html, /No legal move on your turn means you lose/);
 });
 
+test("index: mode menu and active play surfaces expose Task 25 controls", async () => {
+  const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
+
+  assert.match(html, /id="tutorial-mode-button"/);
+  assert.match(html, /<span class="mode-title">Tutorial<\/span>/);
+  assert.match(html, /<span class="mode-title">Puzzle Rush<\/span>/);
+  assert.match(html, /<span class="mode-title">Battle Hot-seat<\/span>/);
+  assert.match(html, /<span class="mode-title">Battle vs AI<\/span>/);
+  assert.match(html, /id="btn-tutorial-menu"/);
+  assert.match(html, /id="btn-rush-abandon"/);
+  assert.match(html, /id="btn-battle-abandon"/);
+});
+
 test("main: post-game action buttons can replay or return to mode selection", async () => {
   const env = installEnv();
   try {
-    const { TUTORIALS } = await import("../src/levels.js");
     await import(`../src/main.js?post-game-actions-${Date.now()}`);
-
-    for (let step = 0; step < TUTORIALS.length; step++) env.el("nav-next").click();
 
     env.el("rush-mode-button").click();
     assert.equal(env.el("app").classList.contains("mode-rush"), true, "Rush starts from mode select");
@@ -233,6 +250,48 @@ test("main: post-game action buttons can replay or return to mode selection", as
     env.el("btn-battle-menu").click();
     assert.equal(env.el("mode-select").classList.contains("hidden"), false, "Battle menu action returns to mode selection");
     assert.equal(env.el("app").classList.contains("mode-battle"), false, "Battle menu action tears down Battle mode");
+  } finally {
+    env.restore();
+  }
+});
+
+test("main: active Main Menu controls abandon Tutorial, Rush, and Battle without terminal overlays", async () => {
+  const env = installEnv();
+  try {
+    const { TUTORIALS } = await import("../src/levels.js");
+    await import(`../src/main.js?active-abandon-${Date.now()}`);
+
+    const savedProgress = JSON.stringify({
+      dirs: Object.fromEntries(TUTORIALS[0].edges.map((edge) => [edge.id, edge.dir])),
+      moves: 1,
+    });
+    env.storage.setItem(`the-lock:${TUTORIALS[0].id}:progress`, savedProgress);
+
+    env.el("tutorial-mode-button").click();
+    assert.equal(env.el("level-title").textContent, TUTORIALS[0].name, "Tutorial starts from the menu");
+    env.el("btn-tutorial-menu").click();
+    assert.equal(env.el("mode-select").classList.contains("hidden"), false, "Tutorial abandon returns to mode selection");
+    assert.equal(env.storage.getItem(`the-lock:${TUTORIALS[0].id}:progress`), savedProgress, "Tutorial abandon does not rewrite saved progress");
+    assert.equal(env.el("result-card").classList.contains("hidden"), true, "Tutorial abandon does not show the solved card");
+
+    env.el("rush-mode-button").click();
+    assert.equal(env.el("rush-strikes").textContent, "···", "Rush starts with no strikes");
+    env.el("btn-rush-abandon").click();
+    assert.equal(env.el("mode-select").classList.contains("hidden"), false, "Rush abandon returns to mode selection");
+    assert.equal(env.el("app").classList.contains("mode-rush"), false, "Rush abandon removes Rush mode chrome");
+    assert.equal(env.el("rush-over").classList.contains("hidden"), true, "Rush abandon does not show run-over");
+    assert.equal(env.el("rush-strikes").textContent, "···", "Rush abandon does not spend a strike");
+
+    env.el("battle-mode-button").click();
+    env.el("btn-battle-abandon").click();
+    assert.equal(env.el("mode-select").classList.contains("hidden"), false, "Hot-seat abandon returns to mode selection");
+    assert.equal(env.el("app").classList.contains("mode-battle"), false, "Hot-seat abandon removes Battle mode chrome");
+    assert.equal(env.el("battle-result").classList.contains("hidden"), true, "Hot-seat abandon does not show terminal result");
+
+    env.el("battle-ai-mode-button").click();
+    env.el("btn-battle-abandon").click();
+    assert.equal(env.el("mode-select").classList.contains("hidden"), false, "Battle vs AI abandon returns to mode selection");
+    assert.equal(env.el("battle-status").textContent, "", "Battle vs AI abandon clears thinking/status text");
   } finally {
     env.restore();
   }
