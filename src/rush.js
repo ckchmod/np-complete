@@ -1,4 +1,4 @@
-// THE LOCK — Rush (Survival) mode. Reuses engine + render + generator.
+// THE LOCK — Rush (Survival) mode. Reuses engine + 3D render + generator.
 //
 // Pick as many locks as you can. Each lock must be solved within a MOVE BUDGET
 // (par + slack); blowing the budget, or tapping Skip, costs a strike. Three
@@ -6,7 +6,7 @@
 // and runs in tens of ms (layout-dominated), well within the post-solve delay.
 
 import { makeConfig, isLegalFlip, legalFlips, applyFlip, isSolved, inflow } from "./engine.js";
-import { createBoard } from "./render.js";
+import { createBoard3d } from "./render3d.js";
 import { generateLock, makeRng } from "./generator.js";
 
 const STRIKES_MAX = 3;
@@ -40,8 +40,13 @@ function saveBest(n) {
   try { localStorage.setItem(STORAGE_BEST, String(n)); } catch (_) {}
 }
 
-export function createRush({ mountEl, seed, onGameOver, levelFactory = generateLock } = {}) {
-  const svgEl = mountEl.querySelector("#board");
+function withTestThree(options) {
+  const testThree = globalThis.__THE_LOCK_RENDER3D_THREE__;
+  return testThree && !options.THREE ? { ...options, THREE: testThree } : options;
+}
+
+export function createRush({ mountEl, seed, onGameOver, levelFactory = generateLock, boardFactory = createBoard3d, boardOptions = {} } = {}) {
+  const boardEl = mountEl.querySelector("#board");
   const scoreEl = mountEl.querySelector("#rush-score");
   const strikesEl = mountEl.querySelector("#rush-strikes");
   const movesEl = mountEl.querySelector("#rush-moves");
@@ -125,7 +130,7 @@ export function createRush({ mountEl, seed, onGameOver, levelFactory = generateL
     budget = moveBudget(level.par);
     history = [];
     if (board) board.destroy(); // cancel the previous board's cascade timers before rebuild
-    board = createBoard(svgEl, config, { onEdgeTap: handleTap });
+    board = boardFactory(boardEl, config, withTestThree({ ...boardOptions, onEdgeTap: handleTap }));
     board.markLegal(legalFlips(config));
     locked = false;
     updateHUD();
@@ -138,7 +143,7 @@ export function createRush({ mountEl, seed, onGameOver, levelFactory = generateL
       const edge = config.edgeById.get(edgeId);
       const receiver = config.dirs.get(edgeId) === "uv" ? edge.v : edge.u;
       board.pulseNode(receiver);
-      board.explainIllegal(edgeId, receiver, inflow(config, receiver), edge.w);
+      board.explainIllegal?.(edgeId, receiver, inflow(config, receiver), edge.w);
       return;
     }
     history.push(config);
@@ -152,7 +157,7 @@ export function createRush({ mountEl, seed, onGameOver, levelFactory = generateL
       solved++;
       totalMoves += moves;
       locked = true;
-      board.winCascade();
+      board.winCascade?.();
       updateHUD();
       schedule(loadNext, SOLVE_DELAY);
     } else if (moves >= budget) {
@@ -176,7 +181,7 @@ export function createRush({ mountEl, seed, onGameOver, levelFactory = generateL
     locked = true;
     history = [];
     renderStrikes();
-    if (board) board.strikeFlash();           // red flash + shake on the board
+    if (board) board.strikeFlash?.();
     if (strikesEl) { strikesEl.classList.remove("struck"); void strikesEl.offsetWidth; strikesEl.classList.add("struck"); }
     try { if (navigator.vibrate) navigator.vibrate(60); } catch (_) {}
     updateHUD();

@@ -11,18 +11,46 @@ function ruleBody(source, selector) {
   return match ? match[1] : "";
 }
 
-test("touch targets: board and controls use manipulation touch-action", async () => {
-  const [css, html] = await Promise.all([
-    readFile(cssUrl, "utf8"),
-    readFile(htmlUrl, "utf8"),
-  ]);
+test("touch targets: board hosts are neutral 3D canvas containers", async () => {
+  const html = await readFile(htmlUrl, "utf8");
 
-  assert.match(html, /<svg id="board" class="board"/);
+  assert.match(html, /<div id="board" class="board" aria-label="puzzle board"><\/div>/);
+  assert.match(html, /<div id="battle-board" class="board battle-board" aria-label="battle puzzle board"><\/div>/);
+  const svgTag = "<" + "svg";
+  assert.equal(html.includes(`${svgTag} id="board"`), false);
+  assert.equal(html.includes(`${svgTag} id="battle-board"`), false);
+});
+
+test("touch targets: board and controls use manipulation touch-action", async () => {
+  const css = await readFile(cssUrl, "utf8");
+
   assert.match(ruleBody(css, ".board"), /touch-action:\s*manipulation;/);
-  assert.match(ruleBody(css, ".edge-group"), /touch-action:\s*manipulation;/);
   assert.match(ruleBody(css, ".btn"), /touch-action:\s*manipulation;/);
   assert.match(ruleBody(css, ".btn-help"), /touch-action:\s*manipulation;/);
+  assert.match(css, /\.board > canvas,[\s\S]*?\{[\s\S]*?touch-action:\s*manipulation;/);
   assert.equal(css.includes("touch-action: none"), false);
+});
+
+test("touch targets: 3D renderer canvas fills board mounts without SVG layout rules", async () => {
+  const css = await readFile(cssUrl, "utf8");
+
+  const canvasRule = css.match(/\.board > canvas,[\s\S]*?\}/)?.[0] || "";
+  assert.match(canvasRule, /\.battle-board > canvas/);
+  assert.match(canvasRule, /display:\s*block;/);
+  assert.match(canvasRule, /width:\s*100%;/);
+  assert.match(canvasRule, /height:\s*100%;/);
+  assert.match(canvasRule, /max-width:\s*100%;/);
+  assert.match(canvasRule, /max-height:\s*100%;/);
+  assert.match(canvasRule, /touch-action:\s*manipulation;/);
+});
+
+test("touch targets: renderer canvas has a visible keyboard focus cue", async () => {
+  const css = await readFile(cssUrl, "utf8");
+
+  const focusRule = css.match(/\.board > canvas:focus-visible,[\s\S]*?\}/)?.[0] || "";
+  assert.match(focusRule, /\.battle-board > canvas:focus-visible/);
+  assert.match(focusRule, /outline:\s*2px solid var\(--c-legal\);/);
+  assert.match(focusRule, /outline-offset:\s*2px;/);
 });
 
 test("touch targets: buttons meet the 44px minimum hit area", async () => {
@@ -36,18 +64,28 @@ test("touch targets: buttons meet the 44px minimum hit area", async () => {
   assert.match(ruleBody(css, ".btn-help"), /height:\s*44px;/);
 });
 
-test("touch targets: edge hit corridors stay wide and clickable", async () => {
+test("touch targets: obsolete SVG edge and node CSS selectors are removed", async () => {
   const css = await readFile(cssUrl, "utf8");
+  const edge = "edge";
+  const node = "node";
+  const board = "board";
+  const illegal = "illegal";
+  const obsoleteSelectors = [
+    `.${edge}-group`,
+    `.${edge}-line`,
+    `.${edge}-arrow`,
+    `.${edge}-hit`,
+    `.${edge}-ghost`,
+    `.${edge}-charge`,
+    `.${node}-group`,
+    `.${node}-ring`,
+    `.${node}-glow`,
+    `.${illegal}-explain`,
+    `.${board}.is-won`,
+    `.${board}.is-strike`,
+  ];
 
-  assert.match(ruleBody(css, ".edge-group"), /cursor:\s*pointer;/);
-  assert.match(ruleBody(css, ".edge-hit"), /stroke-width:\s*44;/);
-  assert.match(ruleBody(css, ".edge-hit"), /pointer-events:\s*stroke;/);
-});
-
-test("touch targets: keyboard-focused edges have a visible focus cue", async () => {
-  const css = await readFile(cssUrl, "utf8");
-
-  assert.match(ruleBody(css, ".edge-group:focus-within"), /drop-shadow\(0 0 7px var\(--c-legal\)\)/);
-  assert.match(ruleBody(css, ".edge-group:focus-within .edge-line"), /stroke:\s*var\(--c-legal\);/);
-  assert.match(ruleBody(css, ".edge-group:focus-within .edge-arrow"), /fill:\s*var\(--c-legal\);/);
+  for (const selector of obsoleteSelectors) {
+    assert.equal(css.includes(selector), false, `${selector} should not remain in active CSS`);
+  }
 });
