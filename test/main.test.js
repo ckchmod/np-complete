@@ -1,6 +1,51 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import * as THREE_MOCK from "./helpers/three-mock.js";
 import { readFile } from "node:fs/promises";
+
+
+let nextRaycastEdgeId = null;
+
+function createPointerThreeMock() {
+  class PointerRenderer extends THREE_MOCK.WebGLRenderer {
+    constructor(parameters = {}) {
+      super(parameters);
+      const canvas = fakeEl("canvas");
+      let capturedPointerId = null;
+      canvas.nodeName = "CANVAS";
+      canvas.width = 0;
+      canvas.height = 0;
+      canvas.getContext = () => null;
+      canvas.setPointerCapture = (pointerId) => {
+        capturedPointerId = pointerId;
+      };
+      canvas.releasePointerCapture = (pointerId) => {
+        if (capturedPointerId === pointerId) capturedPointerId = null;
+      };
+      Object.defineProperty(canvas, "capturedPointerId", { get: () => capturedPointerId });
+      this.domElement = canvas;
+    }
+  }
+
+  class TargetRaycaster extends THREE_MOCK.Raycaster {
+    intersectObjects(objects, recursive = false) {
+      if (nextRaycastEdgeId) {
+        const object = objects.find((candidate) => candidate.userData?.edgeId === nextRaycastEdgeId);
+        if (object) return [{ object, distance: 0, point: object.position?.clone?.() || new THREE_MOCK.Vector3(), face: null, faceIndex: 0 }];
+      }
+      return super.intersectObjects(objects, recursive);
+    }
+  }
+
+  return { ...THREE_MOCK, WebGLRenderer: PointerRenderer, Raycaster: TargetRaycaster };
+}
+
+function clickCanvasEdge(canvas, edgeId) {
+  nextRaycastEdgeId = edgeId;
+  canvas.dispatch("pointerdown", { pointerId: 1, button: 0, isPrimary: true, clientX: 160, clientY: 240, timeStamp: 0, preventDefault() {} });
+  canvas.dispatch("pointerup", { pointerId: 1, button: 0, isPrimary: true, clientX: 160, clientY: 240, timeStamp: 20, preventDefault() {} });
+  nextRaycastEdgeId = null;
+}
 
 function fakeEl(id = "") {
   const children = [];
@@ -98,6 +143,9 @@ function collect(root, predicate, found = []) {
 }
 
 function firstPlayableBattleHit(board) {
+  const canvas = board.children.find((child) => child.nodeName === "CANVAS");
+  if (canvas) return { click: () => clickCanvasEdge(canvas, "e7") };
+
   const legalGroups = collect(board, (node) => node.dataset?.edge && node.classList?.contains("is-legal"));
   const group = legalGroups.find((node) => !node.classList.contains("is-target")) || legalGroups[0];
   return group ? group.children[group.children.length - 1] : null;
@@ -127,6 +175,7 @@ function installEnv() {
     performance: globalThis.performance,
     requestAnimationFrame: globalThis.requestAnimationFrame,
     random: Math.random,
+    renderThree: globalThis.__THE_LOCK_RENDER3D_THREE__,
   };
   const storage = fakeLocalStorage();
   globalThis.document = {
@@ -134,10 +183,11 @@ function installEnv() {
     createElementNS: () => fakeEl(),
   };
   globalThis.localStorage = storage;
-  globalThis.window = { matchMedia: () => ({ matches: true }) };
+  globalThis.window = { devicePixelRatio: 1, addEventListener() {}, removeEventListener() {}, matchMedia: () => ({ matches: true }) };
   globalThis.performance = { now: () => 0 };
   globalThis.requestAnimationFrame = () => 0;
   Math.random = () => 0.25;
+  globalThis.__THE_LOCK_RENDER3D_THREE__ = createPointerThreeMock();
 
   return {
     storage,
@@ -149,6 +199,7 @@ function installEnv() {
       globalThis.performance = previous.performance;
       globalThis.requestAnimationFrame = previous.requestAnimationFrame;
       Math.random = previous.random;
+      globalThis.__THE_LOCK_RENDER3D_THREE__ = previous.renderThree;
       elements.clear();
     },
   };
@@ -268,6 +319,7 @@ test("main: Battle rules pause a queued Battle vs AI move until closed", async (
     env.storage.setItem("the-lock:intro-seen", "1");
     await import(`../src/main.js?battle-help-pause-${Date.now()}`);
 
+    Math.random = () => 0.01;
     env.el("battle-ai-mode-button").click();
     const humanMove = firstPlayableBattleHit(env.el("battle-board"));
     assert.ok(humanMove, "Battle vs AI starts with a playable White move");

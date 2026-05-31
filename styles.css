@@ -176,11 +176,89 @@ body {
 }
 
 .board {
+  position: relative;
   width: 100%;
   height: 100%;
   max-height: 100%;
-  overflow: visible;
+  overflow: hidden;
   touch-action: manipulation;
+}
+
+.board > canvas,
+.battle-board > canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: inherit;
+  background: transparent;
+  touch-action: manipulation;
+  cursor: grab;
+}
+
+
+.board > canvas:active,
+.battle-board > canvas:active {
+  cursor: grabbing;
+}
+
+.board > canvas:focus-visible,
+.battle-board > canvas:focus-visible {
+  outline: 2px solid var(--c-legal);
+  outline-offset: 2px;
+}
+
+.board-zoom-controls {
+  position: absolute;
+  right: var(--space-2);
+  bottom: var(--space-2);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: var(--panel-border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-overlay);
+  touch-action: manipulation;
+}
+
+.board-zoom-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  border: var(--panel-border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  color: var(--c-white);
+  font-family: var(--font-label);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: border-color var(--transition), color var(--transition), opacity var(--transition);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.board-zoom-button:hover:not(:disabled) {
+  border-color: var(--c-grey);
+  color: var(--c-legal);
+}
+
+.board-zoom-button:focus-visible {
+  outline: 2px solid var(--c-legal);
+  outline-offset: 2px;
+}
+
+.board-zoom-button:disabled {
+  cursor: default;
+  opacity: 0.35;
 }
 
 .battle-board {
@@ -274,290 +352,6 @@ body {
 .battle-actions {
   margin-top: var(--space-3);
 }
-
-/* ── Edge styles ──────────────────────────────────────────────────────────── */
-
-.edge-group {
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-.edge-line {
-  stroke: var(--c-grey);
-  stroke-linecap: round;
-  fill: none;
-  transition: stroke var(--transition), opacity var(--transition);
-}
-
-.edge-arrow {
-  fill: var(--c-grey);
-  transition: fill var(--transition), opacity var(--transition);
-}
-
-.edge-hit {
-  stroke: transparent;
-  stroke-width: 44; /* invisible 44px hit corridor; the path is transparent so overlap is harmless */
-  vector-effect: non-scaling-stroke;
-  fill: none;
-  pointer-events: stroke;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-.edge-group:focus-within {
-  filter: drop-shadow(0 0 7px var(--c-legal));
-}
-
-.edge-group:focus-within .edge-line {
-  stroke: var(--c-legal);
-}
-
-.edge-group:focus-within .edge-arrow {
-  fill: var(--c-legal);
-}
-
-/* Weight variants */
-.edge-group.is-thick .edge-line  { stroke-width: 3.2; }
-.edge-group.is-thin  .edge-line  { stroke-width: 1.1; }
-.edge-group.is-thick .edge-arrow { /* inherits */ }
-.edge-group.is-thin  .edge-arrow { transform-origin: center; }
-
-/* Target edge */
-.edge-group.is-target .edge-line  { stroke: var(--c-target); }
-.edge-group.is-target .edge-arrow { fill: var(--c-target); }
-
-/* Ghost goal marker: a faint DASHED RING around the node the red target must
-   point into after reversal — shows the destination without looking like a
-   second arrowhead. */
-.edge-ghost {
-  fill: none;
-  stroke: var(--c-target);
-  stroke-width: 0.8;
-  stroke-dasharray: 1.6 1.4;
-  opacity: 0.7;
-  transition: opacity var(--transition);
-}
-
-/* Legal (flippable) affordance. Excludes the red target: the target is already
-   signalled by its colour, and a cyan glow hugging the red arrow read as a
-   confusing "cyan under the red". */
-.edge-group.is-legal:not(.is-target) { filter: drop-shadow(0 0 4px var(--c-legal)); }
-
-.board.is-battle .edge-group.is-legal {
-  filter: drop-shadow(0 0 6px var(--c-legal));
-}
-
-.board.is-battle .edge-group.is-owner-white:not(.is-target) .edge-line {
-  stroke: var(--c-owner-white);
-}
-
-.board.is-battle .edge-group.is-owner-white:not(.is-target) .edge-arrow {
-  fill: var(--c-owner-white);
-}
-
-.board.is-battle .edge-group.is-owner-black:not(.is-target) .edge-line {
-  stroke: var(--c-owner-black);
-}
-
-.board.is-battle .edge-group.is-owner-black:not(.is-target) .edge-arrow {
-  fill: var(--c-owner-black);
-}
-
-.edge-charge {
-  pointer-events: none;
-}
-
-.edge-charge-bg {
-  fill: var(--c-charge-bg);
-  stroke: currentColor;
-  stroke-width: var(--charge-stroke);
-}
-
-.edge-charge-text {
-  fill: var(--c-white);
-  font-family: var(--font-label);
-  font-size: var(--charge-text);
-  font-weight: 700;
-  line-height: 1;
-  text-anchor: middle;
-  dominant-baseline: middle;
-}
-
-.board.is-battle .edge-group.is-owner-white { color: var(--c-owner-white); }
-.board.is-battle .edge-group.is-owner-black { color: var(--c-owner-black); }
-.board.is-battle .edge-group.is-owner-neutral { color: var(--c-grey); }
-.board.is-battle .edge-group.is-spent .edge-charge-bg { stroke: var(--c-dim); }
-.board.is-battle .edge-group.is-spent .edge-charge-text { fill: var(--c-grey); }
-
-/* Dim non-legal edges (applied to the whole group so the line and head don't
-   double-composite into a darker sliver where they meet). */
-.board:not(.no-legal) .edge-group:not(.is-legal):not(.is-target) { opacity: 0.22; }
-
-.board.is-battle .edge-group.is-opponent:not(.is-target):not(.is-target-b) { opacity: var(--battle-dim); }
-.board.is-battle .edge-group.is-opponent.is-target,
-.board.is-battle .edge-group.is-opponent.is-target-b { opacity: var(--battle-target-dim); }
-
-.edge-group.is-illegal-edge .edge-line,
-.edge-group.is-illegal-edge .edge-arrow {
-  stroke: var(--c-slack);
-  fill: var(--c-slack);
-}
-
-.node-group.is-illegal-receiver .node-ring {
-  stroke: var(--c-slack);
-}
-
-.node-group.is-illegal-receiver .node-glow {
-  opacity: 0.88;
-  stroke: var(--c-slack);
-}
-
-.illegal-explain {
-  pointer-events: none;
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: illegal-pop 0.32s ease-out both;
-}
-
-.illegal-explain-layer {
-  pointer-events: none;
-}
-
-.illegal-explain-text {
-  fill: var(--c-white);
-  font-family: var(--font-label);
-  font-size: 3.2px;
-  font-weight: 700;
-  text-anchor: middle;
-  dominant-baseline: middle;
-}
-
-@keyframes illegal-pop {
-  0% { opacity: 0; transform: translateY(2px) scale(0.82); }
-  60% { opacity: 1; transform: translateY(0) scale(1.06); }
-  100% { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-@keyframes illegal-flash {
-  0% { fill: var(--c-white); opacity: 0.35; }
-  45% { fill: var(--c-target); opacity: 1; }
-  100% { fill: var(--c-target); opacity: 0.95; }
-}
-
-.illegal-explain-current,
-.illegal-explain-weight {
-  animation: illegal-pop 0.32s ease-out both;
-}
-
-.illegal-explain-weight {
-  fill: var(--c-slack);
-}
-
-.illegal-explain-result,
-.illegal-explain-low {
-  animation: illegal-flash 0.7s ease-out both;
-}
-
-.illegal-explain-result {
-  fill: var(--c-target);
-}
-
-.illegal-explain-low {
-  fill: var(--c-target);
-  font-size: 2.8px;
-}
-
-/* Shake animation for illegal tap */
-@keyframes shake {
-  0%   { transform: translateX(0); }
-  20%  { transform: translateX(-3px); }
-  40%  { transform: translateX(3px); }
-  60%  { transform: translateX(-2px); }
-  80%  { transform: translateX(2px); }
-  100% { transform: translateX(0); }
-}
-
-.edge-group.is-shaking {
-  animation: shake 0.35s ease-out forwards;
-}
-
-/* ── Node styles ──────────────────────────────────────────────────────────── */
-
-.node-group {
-  /* transform set inline via translate() in render.js */
-}
-
-.node-glow {
-  fill: none;
-  stroke: var(--c-slack);
-  stroke-width: 1.6;
-  opacity: 0;
-  /* Slack-proportional opacity via CSS calc on --slack custom property */
-  opacity: calc(var(--slack, 0) * 0.22);
-  transition: opacity 0.3s ease;
-  filter: blur(0.4px);
-}
-
-/* Override for nodes with significant slack */
-.node-group[style*="--slack: 1"] .node-glow,
-.node-group[style*="--slack:1"]  .node-glow { opacity: 0.45; }
-.node-group[style*="--slack: 2"] .node-glow,
-.node-group[style*="--slack:2"]  .node-glow { opacity: 0.65; }
-.node-group[style*="--slack: 3"] .node-glow,
-.node-group[style*="--slack:3"]  .node-glow { opacity: 0.78; }
-.node-group[style*="--slack: 4"] .node-glow,
-.node-group[style*="--slack:4"]  .node-glow { opacity: 0.88; }
-
-.node-ring {
-  fill: var(--bg);
-  stroke: var(--c-grey);
-  stroke-width: 0.9;
-  transition: stroke var(--transition);
-}
-
-/* Tight node: dimmer, strained look */
-.node-group.is-tight .node-ring {
-  stroke: #444450;
-}
-
-/* Pulse animation */
-@keyframes node-pulse {
-  0%   { r: 3.2; opacity: 1; }
-  40%  { r: 5.2; opacity: 0.6; }
-  100% { r: 3.2; opacity: 1; }
-}
-
-.node-group.is-pulsing .node-ring {
-  animation: node-pulse 0.45s ease-out forwards;
-}
-
-/* Win pulse */
-@keyframes win-pulse {
-  0%   { stroke: var(--c-grey); r: 3.2; }
-  35%  { stroke: var(--c-win);  r: 5.6; }
-  100% { stroke: var(--c-win);  r: 3.2; }
-}
-
-.node-group.is-win-pulsing .node-ring {
-  animation: win-pulse 0.5s ease-out forwards;
-}
-
-.board.is-won .node-glow {
-  stroke: var(--c-win);
-}
-
-/* Unlocked: on a solve the target arrow snaps from red to the win colour and the
-   ghost marker fades — the bolt "throws" into place. */
-.board.is-won .edge-group.is-target .edge-line  { stroke: var(--c-win); }
-.board.is-won .edge-group.is-target .edge-arrow { fill: var(--c-win); }
-.board.is-won .edge-ghost { opacity: 0; }
-
-/* Draw the eye to the red target with a slow breathe (stops once solved). */
-@keyframes target-breathe {
-  0%, 100% { filter: drop-shadow(0 0 1px var(--c-target)); }
-  50%      { filter: drop-shadow(0 0 5px var(--c-target)); }
-}
-.board:not(.is-won) .edge-group.is-target { animation: target-breathe 2.4s ease-in-out infinite; }
 
 /* ── Hint ─────────────────────────────────────────────────────────────────── */
 
@@ -833,16 +627,6 @@ body {
 }
 
 /* ── Rush feedback & juice ─────────────────────────────────────────────────── */
-/* Lost a life: red flash + shake on the whole board (render.js adds .is-strike). */
-@keyframes strike-flash {
-  0%   { filter: none; transform: translateX(0); }
-  12%  { filter: drop-shadow(0 0 7px var(--c-target)); transform: translateX(-5px); }
-  32%  { transform: translateX(5px); }
-  54%  { transform: translateX(-3px); }
-  100% { filter: none; transform: translateX(0); }
-}
-.board.is-strike { animation: strike-flash 0.42s ease-out; }
-
 /* The strikes glyph bumps when a life is spent. */
 @keyframes strike-bump { 0% { transform: scale(1); } 40% { transform: scale(1.5); } 100% { transform: scale(1); } }
 #rush-strikes.struck { display: inline-block; animation: strike-bump 0.4s ease-out; }
@@ -1099,26 +883,14 @@ body {
 }
 
 /* ── Reduced motion ───────────────────────────────────────────────────────── */
-/* Honour the OS "reduce motion" setting: drop the shake/pulse/cascade/strike/
-   slide animations and near-instant all transitions. (JS rAF tweens are gated
-   separately in render.js via matchMedia.) */
+/* Honour the OS "reduce motion" setting: drop overlay, status, and result
+   animations and near-instant all transitions. */
 @media (prefers-reduced-motion: reduce) {
-  .board:not(.is-won) .edge-group.is-target,
   .overlay:not(.hidden),
   .overlay:not(.hidden) .overlay-card,
-  .edge-group.is-shaking,
-  .node-group.is-pulsing .node-ring,
-  .node-group.is-win-pulsing .node-ring,
-  .node-group.is-illegal-receiver .node-ring,
-  .board.is-strike,
   #rush-strikes.struck,
   #rush-moves.low,
   .result-card.visible,
-  .illegal-explain,
-  .illegal-explain-current,
-  .illegal-explain-weight,
-  .illegal-explain-result,
-  .illegal-explain-low,
   .battle-status.thinking::after { animation: none !important; }
   * { transition-duration: 0.01ms !important; }
 }
