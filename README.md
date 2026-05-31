@@ -112,7 +112,7 @@ npm run gates      # prints the solver gates (THE LOCK, THE_LOCK_V2, tutorials) 
 | `src/gadgetBuilders.js` | Standalone gadget fixtures and metadata for richer generated lock families |
 | `src/generator.js` | Live Rush generator with solver verification, gadget-family sampling, phone-readable spacing, and diagnostics hooks |
 | `src/levels.js` | 6 tutorials plus authored **THE LOCK** and **THE_LOCK_V2** boards outside Rush |
-| `src/render.js` | SVG board: curved/adaptively bowed edges, weight-scaled arrowheads, slack glow, red targets, ghost markers, flip animation, and Battle badges |
+| `src/render3d.js` | 3D board: spherical layout, great-circle edges, front/back hemisphere fades, input handling, and Battle badges |
 | `src/game.js` | Tutorial controller: moves, undo/reset, par/stars/score, localStorage, share + path hash |
 | `src/rush.js` | Puzzle Rush: endless generated locks, move budget, 3 strikes, difficulty ramp |
 | `src/battleEngine.js` | Battle rules: turns, ownership, charges, legal flips, target wins, and no-legal-move losses |

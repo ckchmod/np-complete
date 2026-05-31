@@ -5,13 +5,13 @@
 **Branch:** main
 
 ## OVERVIEW
-THE LOCK is a static, mobile-first browser puzzle game built from Nondeterministic Constraint Logic. Stack is vanilla ESM JavaScript, SVG, HTML, CSS, Node's built-in test runner, Python's stdlib HTTP server, and a static PWA shell with manifest plus service worker.
+THE LOCK is a static, mobile-first browser puzzle game built from Nondeterministic Constraint Logic. Stack is vanilla ESM JavaScript, Three.js, HTML, CSS, Node's built-in test runner, Python's stdlib HTTP server, and a static PWA shell with manifest plus service worker.
 
 ## STRUCTURE
 ```
 np-complete/
 ├── index.html              # browser shell; loads src/main.js directly
-├── styles.css              # noir theme, mode visibility, replay/PWA/update UI, SVG state classes
+├── styles.css              # noir theme, mode visibility, replay/PWA/update UI, renderer state classes
 ├── manifest.json           # PWA app metadata
 ├── sw.js                   # offline cache service worker
 ├── src/                    # app, rules, solver, generator, rendering, Battle AI, replay
@@ -31,7 +31,7 @@ np-complete/
 | Battle rules / AI | `src/battleEngine.js`, `src/battleSolver.js`, `src/battleGenerator.js`, `src/battle.js`, `src/aiBattle.js` | Battle is a finite charged NCL game. Battle vs AI is local deterministic rule/search code, not an LLM or service. |
 | Replay surfaces | `src/replay.js`, `src/replayUI.js`, `src/battleReplay.js` | Replay and post-game Battle analysis. Hide analysis during active play. |
 | PWA / offline | `manifest.json`, `sw.js`, `src/main.js` | Static installable shell, offline cache, and service worker update notice. |
-| SVG board contract | `src/render.js`, `styles.css` | CSS classes/data attrs are coupled to renderer output. |
+| 3D spherical renderer contract | `src/render3d.js`, `styles.css` | CSS classes/data attrs are coupled to the Three.js spherical renderer output and board-state styling. |
 | Tutorial session state | `src/game.js` | Move history, undo/reset, localStorage resume, scoring/share. |
 | Tests | `test/*.test.js` | 203 current node:test cases at this milestone; avoid hard-coding counts in README. |
 | Product/spec intent | `docs/superpowers/specs/*.md` | Use for domain decisions before changing mechanics. |
@@ -45,7 +45,7 @@ np-complete/
 | `bfsSolve` | function | `src/solver.js` | Exhaustive BFS for par and reachable count. |
 | `solveTarget` | function | `src/solver.js` | Goal-directed BFS used by live generator. |
 | `generateLock` | function | `src/generator.js` | Builds solver-verified Rush levels. |
-| `createBoard` | function | `src/render.js` | Builds SVG board and exposes update/animation API. |
+| `createBoard3d` | function | `src/render3d.js` | Builds the Three.js spherical board and exposes update/animation API. |
 | `createGame` | function | `src/game.js` | Tutorial-mode controller. |
 | `createRush` | function | `src/rush.js` | Survival-mode controller. |
 | `createBattle` | function | `src/battle.js` | Battle Hot-seat and Battle vs AI controller. |
@@ -62,7 +62,7 @@ np-complete/
 - Code comments are unusually load-bearing in `src/engine.js`, `src/solver.js`, `src/generator.js`, and `src/levels.js`; update them only when behavior changes.
 - Domain names: thin edge = weight 1, thick edge = weight 2, red edge = target, `par` = solver optimal length.
 - `levels.js` par values are contracts with `bfsSolve`, not decorative metadata.
-- DOM refs use exact IDs from `index.html`; class names in `styles.css` are part of the renderer contract.
+- DOM refs use exact IDs from `index.html`; class names in `styles.css` are part of the board renderer contract and its mount/state styling.
 - `scripts/gates.mjs` must print one JSON object to stdout and exit nonzero on error.
 - `manifest.json` and `sw.js` are part of the shipped static artifact. Keep PWA/offline behavior zero-dependency and compatible with GitHub Pages.
 
@@ -76,7 +76,7 @@ np-complete/
 - Do not edit `.omc/` or `.omo/` as project source; they are local agent/runtime state.
 
 ## UNIQUE STYLES
-- Minimal noir UI: near-black surface, white/gray graph, red target, cyan legal/win glow, amber slack/low-budget.
+- Minimal noir UI: near-black surface, white/gray graph, red target, cyan legal/win glow, amber slack/low-budget, and 3D spherical presentation that still preserves the tight CSS/renderer coupling.
 - Board coordinates use portrait phone space; authored levels keep `x` in `[0,100]`, `y` in `[0,160]`.
 - Rush boards are generated live, seeded with `makeRng`, capped for phone legibility, and solver-verified before display.
 - The mode hub exposes Tutorial, Puzzle Rush, Battle Hot-seat, and Battle vs AI after the intro.
