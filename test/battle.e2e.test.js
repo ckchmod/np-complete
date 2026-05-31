@@ -4,9 +4,11 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { performance } from "node:perf_hooks";
 
 import { createBattle } from "../src/battle.js";
+import { createBoard3d } from "../src/render3d.js";
+import * as THREE_MOCK from "./helpers/three-mock.js";
 
 const EVIDENCE_PATH = new URL("../.omo/evidence/task-17-e2e-battle.json", import.meta.url);
-const CHROMIUM_LIMITATION = "Chrome/Chromium runtime was unavailable in this environment; used the existing zero-dependency injected DOM/SVG harness.";
+const CHROMIUM_LIMITATION = "Chrome/Chromium runtime was unavailable in this environment; used the zero-dependency injected DOM/Three mock harness.";
 
 function fakeEl(tagName = "g") {
   const children = [];
@@ -71,33 +73,38 @@ function fakeEl(tagName = "g") {
   return el;
 }
 
-function findAll(root, predicate, found = []) {
-  if (predicate(root)) found.push(root);
-  for (const child of root.children || []) findAll(child, predicate, found);
-  return found;
-}
-
-function findEdge(svg, edgeId) {
-  return findAll(svg, (el) => el.dataset && el.dataset.edge === edgeId)[0] || null;
-}
-
 async function withSvgEnv(fn) {
   const previous = {
     document: globalThis.document,
+    performance: globalThis.performance,
     requestAnimationFrame: globalThis.requestAnimationFrame,
+    cancelAnimationFrame: globalThis.cancelAnimationFrame,
     window: globalThis.window,
   };
-  globalThis.document = { createElementNS: (_ns, tagName) => fakeEl(tagName) };
+  globalThis.document = {
+    createElement: (tagName) => fakeEl(tagName),
+    createElementNS: (_ns, tagName) => fakeEl(tagName),
+    body: fakeEl("body"),
+  };
+  globalThis.performance = { now: () => performance.now() };
   globalThis.requestAnimationFrame = (callback) => {
     callback(performance.now() + 1_000);
     return 0;
   };
-  globalThis.window = { matchMedia: () => ({ matches: true }) };
+  globalThis.cancelAnimationFrame = () => {};
+  globalThis.window = {
+    devicePixelRatio: 1,
+    matchMedia: () => ({ matches: true, addEventListener() {}, removeEventListener() {} }),
+    addEventListener() {},
+    removeEventListener() {},
+  };
   try {
     return await fn();
   } finally {
     globalThis.document = previous.document;
+    globalThis.performance = previous.performance;
     globalThis.requestAnimationFrame = previous.requestAnimationFrame;
+    globalThis.cancelAnimationFrame = previous.cancelAnimationFrame;
     globalThis.window = previous.window;
   }
 }
@@ -196,7 +203,7 @@ test("battle e2e: deterministic full game covers illegal moves, charges, turns, 
     browser: {
       playwrightUsed: false,
       limitation: CHROMIUM_LIMITATION,
-      harness: "injected DOM/SVG fake with real createBoard",
+      harness: "injected DOM/Three mock with real createBoard3d",
     },
     moveCap: 8,
     moveSequence,
@@ -211,10 +218,15 @@ test("battle e2e: deterministic full game covers illegal moves, charges, turns, 
       const svg = fakeEl("svg");
       const turnEl = fakeEl("span");
       const statusEl = fakeEl("p");
+      let board = null;
       const battle = createBattle({
         refs: { boardEl: svg, turnEl, statusEl },
         generate: () => {
           throw new Error("Task 17 e2e must not use generated boards");
+        },
+        boardFactory: (mount, config, options) => {
+          board = createBoard3d(mount, config, { ...options, THREE: THREE_MOCK });
+          return board;
         },
         animationMs: 0,
         onIllegalMove: (event) => illegalMoves.push({
@@ -233,7 +245,7 @@ test("battle e2e: deterministic full game covers illegal moves, charges, turns, 
       const started = battle.start({ level, initialTurn: "white" });
       edgeCaseChecks.deterministicFixture = started.level.id === "task-17-battle-e2e";
       edgeCaseChecks.generatedBoardNotUsed = battle.level === level;
-      edgeCaseChecks.rendererHarnessUsed = svg.classList.contains("is-battle") && findEdge(svg, "cycle") !== null;
+      edgeCaseChecks.rendererHarnessUsed = board?.renderer?.type === "WebGLRenderer" && board.edgeMeshes.has("cycle");
       assert.equal(edgeCaseChecks.deterministicFixture, true);
       assert.equal(edgeCaseChecks.generatedBoardNotUsed, true);
       assert.equal(edgeCaseChecks.rendererHarnessUsed, true);
@@ -260,7 +272,7 @@ test("battle e2e: deterministic full game covers illegal moves, charges, turns, 
       assert.equal(battle.state.turn, "black");
       assert.equal(turnEl.textContent, "Black");
       assert.equal(battle.state.charges.get("cycle"), 1);
-      assert.equal(findEdge(svg, "cycle").dataset.charge, "1");
+      assert.equal(board.config.charges.get("cycle"), 1);
       moveSequence.push({ action: "tap", edgeId: "cycle", accepted: true, player: "white", state: captureState(battle.state) });
 
       battle.tap("cycle");
@@ -268,7 +280,7 @@ test("battle e2e: deterministic full game covers illegal moves, charges, turns, 
       assert.equal(battle.state.turn, "white");
       assert.equal(turnEl.textContent, "White");
       assert.equal(battle.state.charges.get("cycle"), 0);
-      assert.equal(findEdge(svg, "cycle").dataset.charge, "0");
+      assert.equal(board.config.charges.get("cycle"), 0);
       assert.equal(battle.state.legalMoves.includes("cycle"), false);
       assert.ok(battle.state.legalMoves.includes("white-target"));
       edgeCaseChecks.turnSwitchesAfterLegalMoves = true;
@@ -286,7 +298,7 @@ test("battle e2e: deterministic full game covers illegal moves, charges, turns, 
       battle.tap("white-target");
       assert.deepEqual(battle.terminal, { terminal: true, winner: "white", reason: "target" });
       assert.equal(statusEl.textContent, "White Wins!");
-      assert.equal(svg.classList.contains("is-won"), true);
+      assert.equal(board.legalEdges.size, 0);
       edgeCaseChecks.completeGameToWinner = true;
       moveSequence.push({ action: "tap", edgeId: "white-target", accepted: true, player: "white", terminal: battle.terminal, state: captureState(battle.state) });
 

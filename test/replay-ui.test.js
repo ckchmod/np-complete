@@ -1,11 +1,49 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import * as THREE_MOCK from "./helpers/three-mock.js";
 
 import { applyFlip, legalFlips } from "../src/engine.js";
 import { createGame } from "../src/game.js";
 import { TUTORIALS } from "../src/levels.js";
 import { captureReplay, replayToState } from "../src/replay.js";
 import { createReplayUI } from "../src/replayUI.js";
+
+
+let nextRaycastEdgeId = null;
+
+function createPointerThreeMock() {
+  class PointerRenderer extends THREE_MOCK.WebGLRenderer {
+    constructor(parameters = {}) {
+      super(parameters);
+      const canvas = fakeEl("canvas");
+      let capturedPointerId = null;
+      canvas.nodeName = "CANVAS";
+      canvas.width = 0;
+      canvas.height = 0;
+      canvas.getContext = () => null;
+      canvas.setPointerCapture = (pointerId) => {
+        capturedPointerId = pointerId;
+      };
+      canvas.releasePointerCapture = (pointerId) => {
+        if (capturedPointerId === pointerId) capturedPointerId = null;
+      };
+      Object.defineProperty(canvas, "capturedPointerId", { get: () => capturedPointerId });
+      this.domElement = canvas;
+    }
+  }
+
+  class TargetRaycaster extends THREE_MOCK.Raycaster {
+    intersectObjects(objects, recursive = false) {
+      if (nextRaycastEdgeId) {
+        const object = objects.find((candidate) => candidate.userData?.edgeId === nextRaycastEdgeId);
+        if (object) return [{ object, distance: 0, point: object.position?.clone?.() || new THREE_MOCK.Vector3(), face: null, faceIndex: 0 }];
+      }
+      return super.intersectObjects(objects, recursive);
+    }
+  }
+
+  return { ...THREE_MOCK, WebGLRenderer: PointerRenderer, Raycaster: TargetRaycaster };
+}
 
 function fakeEl(tagName = "div") {
   const children = [];
@@ -93,8 +131,13 @@ function findOne(root, predicate) {
   return findAll(root, predicate)[0] || null;
 }
 
-function findEdgeHit(svg, edgeId) {
-  return findOne(svg, (el) => el.classList && el.classList.contains("edge-hit") && el.parentNode?.dataset?.edge === edgeId);
+function tapEdge(board, edgeId) {
+  const canvas = board.children[0];
+  assert.ok(canvas, "3D board canvas exists");
+  nextRaycastEdgeId = edgeId;
+  canvas.dispatch("pointerdown", { pointerId: 1, button: 0, isPrimary: true, clientX: 160, clientY: 320, timeStamp: 0, preventDefault() {} });
+  canvas.dispatch("pointerup", { pointerId: 1, button: 0, isPrimary: true, clientX: 160, clientY: 320, timeStamp: 20, preventDefault() {} });
+  nextRaycastEdgeId = null;
 }
 
 function replayMoves(seed, count) {
@@ -118,6 +161,7 @@ async function withDom(fn) {
     clearTimeout: globalThis.clearTimeout,
     localStorage: globalThis.localStorage,
     performance: globalThis.performance,
+    renderThree: globalThis.__THE_LOCK_RENDER3D_THREE__,
   };
 
   function setGlobal(name, value) {
@@ -128,8 +172,8 @@ async function withDom(fn) {
     createElement: (tagName) => fakeEl(tagName),
     createElementNS: (_ns, tagName) => fakeEl(tagName),
   });
-  setGlobal("window", { matchMedia: () => ({ matches: false }) });
-  setGlobal("requestAnimationFrame", (cb) => { cb(1000); return 1; });
+  setGlobal("window", { devicePixelRatio: 1, addEventListener() {}, removeEventListener() {}, matchMedia: () => ({ matches: false }) });
+  setGlobal("requestAnimationFrame", () => 0);
   setGlobal("setTimeout", (cb, delay) => {
     const timer = { id: timers.length + 1, cb, delay, active: true };
     timers.push(timer);
@@ -141,6 +185,7 @@ async function withDom(fn) {
   });
   setGlobal("localStorage", { getItem: () => null, setItem() {}, removeItem() {} });
   setGlobal("performance", { now: () => 0 });
+  setGlobal("__THE_LOCK_RENDER3D_THREE__", createPointerThreeMock());
 
   async function flushNext() {
     const timer = timers.find((entry) => entry.active);
@@ -164,6 +209,7 @@ async function withDom(fn) {
     setGlobal("clearTimeout", previous.clearTimeout);
     setGlobal("localStorage", previous.localStorage);
     setGlobal("performance", previous.performance);
+    setGlobal("__THE_LOCK_RENDER3D_THREE__", previous.renderThree);
   }
 }
 
@@ -186,7 +232,7 @@ test("replay UI appears only after a tutorial solve and keeps analysis collapsed
 
     assert.equal(fixture.el("#replay-ui").children[0].classList.contains("hidden"), true);
 
-    await findEdgeHit(fixture.el("#board"), level.target).click();
+    tapEdge(fixture.el("#board"), level.target);
     await flushAll();
 
     const replayRoot = fixture.el("#replay-ui").children[0];

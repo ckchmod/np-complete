@@ -8,7 +8,7 @@ import {
 import { chooseMove } from "./aiBattle.js";
 import { analyzeBattleReplay, battleMovesFromState } from "./battleReplay.js";
 import { generateBattle } from "./battleGenerator.js";
-import { createBoard } from "./render.js";
+import { createBoard3d } from "./render3d.js";
 import { createReplayUI } from "./replayUI.js";
 
 const PLAYER_LABELS = Object.freeze({ white: "White", black: "Black" });
@@ -35,6 +35,11 @@ function legalBattleFlips(state) {
   return state.level.edges
     .filter((edge) => isLegalBattleFlip(state, edge.id))
     .map((edge) => edge.id);
+}
+
+function withTestThree(options) {
+  const testThree = globalThis.__THE_LOCK_RENDER3D_THREE__;
+  return testThree && !options.THREE ? { ...options, THREE: testThree } : options;
 }
 
 function snapshot(state) {
@@ -64,7 +69,8 @@ export function createBattle({
   difficulty = 1,
   generatorOptions = {},
   generate = generateBattle,
-  boardFactory = createBoard,
+  boardFactory = createBoard3d,
+  boardOptions = {},
   initialCharges = 3,
   initialTurn = "white",
   vsAI = false,
@@ -203,7 +209,7 @@ export function createBattle({
     animating = true;
     if (board) board.markLegal([]);
     showStatus(winnerText(result.winner));
-    if (board) board.winCascade();
+    if (board?.winCascade) board.winCascade();
     showReplayUI();
     if (onTerminal) onTerminal({ ...result, message: winnerText(result.winner), state: snapshot(state) });
     emitState();
@@ -322,7 +328,7 @@ export function createBattle({
     );
     replayInitialCharges = options.initialCharges ?? initialCharges;
     replayInitialTurn = options.initialTurn ?? initialTurn;
-    if (svgEl) board = boardFactory(svgEl, state, { onEdgeTap: handleTap });
+    if (svgEl) board = boardFactory(svgEl, state, withTestThree({ ...boardOptions, ...options.boardOptions, onEdgeTap: handleTap }));
     else board = null;
 
     updateTurn();
