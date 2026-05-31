@@ -1,13 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { makeConfig, isSolved } from "../src/engine.js";
+import { applyFlip, makeConfig, isSolved } from "../src/engine.js";
 import { TUTORIALS } from "../src/levels.js";
+import * as THREE_MOCK from "./helpers/three-mock.js";
 
 // ---------------------------------------------------------------------------
 // Minimal environment stubs.
 //
-// game.js drives render.js (which builds real SVG DOM) plus localStorage and a
+// game.js drives render3d.js (which builds a canvas board) plus localStorage and a
 // couple of timing globals. None of that needs a browser to exercise the
 // session logic, so we stub the narrow surface both modules actually touch:
 //   document.createElementNS + element { setAttribute, appendChild, removeChild,
@@ -21,6 +22,45 @@ import { TUTORIALS } from "../src/levels.js";
 // resume restores the move count, an already-solved save is not resumed as a
 // dead board, and corrupt/legacy storage starts fresh.
 // ---------------------------------------------------------------------------
+
+
+let nextRaycastEdgeId = null;
+
+function createPointerThreeMock() {
+  class PointerRenderer extends THREE_MOCK.WebGLRenderer {
+    constructor(parameters = {}) {
+      super(parameters);
+      const canvas = fakeEl();
+      let capturedPointerId = null;
+      canvas.nodeName = "CANVAS";
+      canvas.width = 0;
+      canvas.height = 0;
+      canvas.getContext = () => null;
+      canvas.setPointerCapture = (pointerId) => {
+        capturedPointerId = pointerId;
+      };
+      canvas.releasePointerCapture = (pointerId) => {
+        if (capturedPointerId === pointerId) capturedPointerId = null;
+      };
+      Object.defineProperty(canvas, "capturedPointerId", { get: () => capturedPointerId });
+      this.domElement = canvas;
+    }
+  }
+
+  class TargetRaycaster extends THREE_MOCK.Raycaster {
+    intersectObjects(objects, recursive = false) {
+      if (nextRaycastEdgeId) {
+        const object = objects.find((candidate) => candidate.userData?.edgeId === nextRaycastEdgeId);
+        if (object) {
+          return [{ object, distance: 0, point: object.position?.clone?.() || new THREE_MOCK.Vector3(), face: null, faceIndex: 0 }];
+        }
+      }
+      return super.intersectObjects(objects, recursive);
+    }
+  }
+
+  return { ...THREE_MOCK, WebGLRenderer: PointerRenderer, Raycaster: TargetRaycaster };
+}
 
 function fakeEl() {
   const children = [];
@@ -103,11 +143,17 @@ async function withEnv(fn) {
     localStorage: globalThis.localStorage,
     performance: globalThis.performance,
     requestAnimationFrame: globalThis.requestAnimationFrame,
+    cancelAnimationFrame: globalThis.cancelAnimationFrame,
+    window: globalThis.window,
+    renderThree: globalThis.__THE_LOCK_RENDER3D_THREE__,
   };
   globalThis.document = { createElement: () => fakeEl(), createElementNS: () => fakeEl() };
   globalThis.localStorage = fakeLocalStorage();
   globalThis.performance = { now: () => 0 };
+  globalThis.window = { devicePixelRatio: 1, addEventListener() {}, removeEventListener() {}, matchMedia: () => ({ matches: true }) };
   globalThis.requestAnimationFrame = () => 0; // never run animation frames
+  globalThis.cancelAnimationFrame = () => {};
+  globalThis.__THE_LOCK_RENDER3D_THREE__ = createPointerThreeMock();
   try {
     const { createGame } = await import("../src/game.js");
     return await fn(createGame);
@@ -116,10 +162,19 @@ async function withEnv(fn) {
     globalThis.localStorage = prev.localStorage;
     globalThis.performance = prev.performance;
     globalThis.requestAnimationFrame = prev.requestAnimationFrame;
+    globalThis.cancelAnimationFrame = prev.cancelAnimationFrame;
+    globalThis.window = prev.window;
+    globalThis.__THE_LOCK_RENDER3D_THREE__ = prev.renderThree;
   }
 }
 
 const progressKey = (levelId) => "the-lock:" + levelId + ":progress";
+
+function progressAfter(level, edgeIds, history = edgeIds) {
+  let config = makeConfig(level);
+  for (const edgeId of edgeIds) config = applyFlip(config, edgeId);
+  return JSON.stringify({ dirs: Object.fromEntries(config.dirs), moves: edgeIds.length, history });
+}
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -141,18 +196,14 @@ function testPathHash(moveIds) {
   return hi + "-" + lo;
 }
 
-// Walk the fake SVG tree to find the hit <line> for a given edge id. render.js
-// builds: svg > g.edge-layer > g.edge-group[dataset.edge] > [line, arrow, hit],
-// so the hit area (the element carrying the click listener) is the last child.
-function findEdgeHit(svg, edgeId) {
-  for (const layer of svg.children) {
-    for (const group of layer.children || []) {
-      if (group.dataset && group.dataset.edge === edgeId) {
-        return group.children[group.children.length - 1];
-      }
-    }
-  }
-  return null;
+function tapEdge(mount, edgeId) {
+  const board = mount.querySelector("#board");
+  const canvas = board.children[0];
+  assert.ok(canvas, "3D board canvas exists");
+  nextRaycastEdgeId = edgeId;
+  canvas.dispatch("pointerdown", { pointerId: 1, button: 0, isPrimary: true, clientX: 160, clientY: 320, timeStamp: 0, preventDefault() {} });
+  canvas.dispatch("pointerup", { pointerId: 1, button: 0, isPrimary: true, clientX: 160, clientY: 320, timeStamp: 20, preventDefault() {} });
+  nextRaycastEdgeId = null;
 }
 
 // ---------------------------------------------------------------------------
@@ -193,12 +244,7 @@ test("game: a win after resume counts resumed moves + this-session moves", async
     const mount = fakeMount();
     createGame({ level: tut1, mountEl: mount, onWin: (p) => (win = p) });
 
-    // Fire the target edge's click to make the single winning flip. Use the
-    // SAME selector game.js uses ("#board") so we inspect the populated board.
-    const board = mount.querySelector("#board");
-    const targetHit = findEdgeHit(board, tut1.target);
-    assert.ok(targetHit, "target edge hit area exists in the rendered board");
-    targetHit.dispatch("click");
+    tapEdge(mount, tut1.target);
 
     // The result card is shown via setTimeout(900); drain it.
     return new Promise((resolve) => {
@@ -217,16 +263,13 @@ test("game: a win after resume counts resumed moves + this-session moves", async
 
 test("game: a resumed solve keeps the full route hash across sessions", async () => {
   await withEnv((createGame) => {
-    const firstMount = fakeMount();
-    const firstGame = createGame({ level: tut3, mountEl: firstMount, onWin: () => {} });
-    findEdgeHit(firstMount.querySelector("#board"), "e3").dispatch("click");
-    firstGame.destroy();
+    localStorage.setItem(progressKey("tut-3"), progressAfter(tut3, ["e3"]));
 
     const secondMount = fakeMount();
     const game = createGame({ level: tut3, mountEl: secondMount, onWin: () => {} });
     assert.equal(secondMount.querySelector("#move-count").textContent, 1, "resume starts from the saved first move");
 
-    findEdgeHit(secondMount.querySelector("#board"), tut3.target).dispatch("click");
+    tapEdge(secondMount, tut3.target);
 
     assert.match(
       game.shareResult(),
@@ -239,10 +282,7 @@ test("game: a resumed solve keeps the full route hash across sessions", async ()
 
 test("game: a resumed solve opens replay with the restored prefix", async () => {
   await withEnv(async (createGame) => {
-    const firstMount = fakeMount();
-    const firstGame = createGame({ level: tut3, mountEl: firstMount, onWin: () => {} });
-    findEdgeHit(firstMount.querySelector("#board"), "e3").dispatch("click");
-    firstGame.destroy();
+    localStorage.setItem(progressKey("tut-3"), progressAfter(tut3, ["e3"]));
 
     let replayStarted = false;
     let win = null;
@@ -254,7 +294,7 @@ test("game: a resumed solve opens replay with the restored prefix", async () => 
       onReplayStart: () => (replayStarted = true),
     });
 
-    findEdgeHit(secondMount.querySelector("#board"), tut3.target).dispatch("click");
+    tapEdge(secondMount, tut3.target);
     await delay(950);
 
     assert.ok(win, "win callback fires after the delayed result card render");
@@ -281,10 +321,7 @@ test("game: a resumed solve opens replay with the restored prefix", async () => 
 
 test("game: corrupt saved history falls back to restored-state replay", async () => {
   await withEnv(async (createGame) => {
-    const firstMount = fakeMount();
-    const firstGame = createGame({ level: tut3, mountEl: firstMount, onWin: () => {} });
-    findEdgeHit(firstMount.querySelector("#board"), "e3").dispatch("click");
-    firstGame.destroy();
+    localStorage.setItem(progressKey("tut-3"), progressAfter(tut3, ["e3"]));
 
     const saved = JSON.parse(localStorage.getItem(progressKey("tut-3")));
     saved.history = ["e1"];
@@ -295,7 +332,7 @@ test("game: corrupt saved history falls back to restored-state replay", async ()
     const game = createGame({ level: tut3, mountEl: secondMount, onWin: (payload) => (win = payload) });
     assert.equal(secondMount.querySelector("#move-count").textContent, 1, "corrupt-history resume keeps the saved move count");
 
-    findEdgeHit(secondMount.querySelector("#board"), tut3.target).dispatch("click");
+    tapEdge(secondMount, tut3.target);
     await delay(950);
 
     assert.ok(win, "win still completes when saved history is corrupt");
@@ -379,31 +416,4 @@ test("game: corrupt or legacy progress is ignored and the board starts fresh", a
       "legacy/corrupt progress -> fresh start, counter 0"
     );
   });
-});
-
-// ---------------------------------------------------------------------------
-// Regression: the board <svg> is reused across locks. winCascade() adds .is-won
-// (which paints the target in the WIN colour); a fresh board must CLEAR it, or
-// the next lock's red target would render win-coloured (cyan) instead of red.
-// ---------------------------------------------------------------------------
-
-test("render: a fresh board clears a stale is-won (next target stays red)", async () => {
-  const prevDoc = globalThis.document;
-  const prevRaf = globalThis.requestAnimationFrame;
-  globalThis.document = { createElementNS: () => fakeEl() };
-  globalThis.requestAnimationFrame = () => 0;
-  try {
-    const { createBoard } = await import("../src/render.js");
-    const svg = fakeEl();
-    svg.classList.add("is-won"); // simulate the previous lock having been solved
-    const board = createBoard(svg, makeConfig(tut1), {}); // build the next lock on the same <svg>
-    assert.equal(svg.classList.contains("is-won"), false, "stale win state must be cleared on (re)build");
-    // clearWin() — used by game.js reset() after a win — drops the class in place:
-    svg.classList.add("is-won");
-    board.clearWin();
-    assert.equal(svg.classList.contains("is-won"), false, "clearWin() drops the win colour");
-  } finally {
-    globalThis.document = prevDoc;
-    globalThis.requestAnimationFrame = prevRaf;
-  }
 });

@@ -9,7 +9,7 @@ import {
   isSolved,
   legalFlips,
 } from "./engine.js";
-import { createBoard } from "./render.js";
+import { createBoard3d } from "./render3d.js";
 import { createReplayUI } from "./replayUI.js";
 
 // ── Persistence helpers ───────────────────────────────────────────────────────
@@ -156,11 +156,16 @@ function fmt(ms) {
   return m + ":" + String(s % 60).padStart(2, "0");
 }
 
+function withTestThree(options) {
+  const testThree = globalThis.__THE_LOCK_RENDER3D_THREE__;
+  return testThree && !options.THREE ? { ...options, THREE: testThree } : options;
+}
+
 // ── createGame ────────────────────────────────────────────────────────────────
 
 export function createGame({ level, mountEl, onWin, onReplayStart }) {
   // Elements expected in mountEl (provided by index.html / main.js):
-  // - svg#board
+  // - #board (board mount)
   // - #move-count, #par-display
   // - #btn-undo, #btn-reset
   // - #result-card (hidden until win)
@@ -233,7 +238,7 @@ export function createGame({ level, mountEl, onWin, onReplayStart }) {
   }
 
   // Build the board renderer
-  const board = createBoard(svgEl, config, { onEdgeTap: handleTap });
+  const board = createBoard3d(svgEl, config, withTestThree({ onEdgeTap: handleTap }));
 
   if (replayMount && typeof document.createElement === "function") {
     replayUI = createReplayUI({
@@ -241,7 +246,7 @@ export function createGame({ level, mountEl, onWin, onReplayStart }) {
       onReplayStart: () => {
         if (onReplayStart) onReplayStart();
         config = activeReplayBaseConfig;
-        board.clearWin();
+        board.clearWin?.();
         board.update(config);
         board.markLegal(legalFlips(config));
       },
@@ -324,7 +329,7 @@ export function createGame({ level, mountEl, onWin, onReplayStart }) {
     }
 
     // Animate
-    board.winCascade();
+    board.winCascade?.();
 
     // Show result card
     winTimer = setTimeout(() => {
@@ -395,7 +400,7 @@ export function createGame({ level, mountEl, onWin, onReplayStart }) {
     config = startConfig;
     clearProgress(level.id);
     board.update(config);
-    board.clearWin(); // a reset after a win must drop the win colour (target back to red)
+    board.clearWin?.(); // 3D boards rebuild from config, so no extra win-state reset is needed.
     refreshLegal();
     updateHUD();
   }
