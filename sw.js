@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-lock-v4";
+const CACHE_NAME = "the-lock-v5";
 const urlsToCache = [
   "/",
   "/index.html",
@@ -7,7 +7,7 @@ const urlsToCache = [
   "/src/levels.js",
   "/src/game.js",
   "/src/engine.js",
-  "/src/render.js",
+  "/src/render3d.js",
   "/src/replayUI.js",
   "/src/replay.js",
   "/src/generator.js",
@@ -22,6 +22,7 @@ const urlsToCache = [
   "/src/battleReplay.js",
   "/src/battleGenerator.js",
   "/manifest.json",
+  "/lib/three.module.min.js",
 ];
 
 self.addEventListener("install", (event) => {

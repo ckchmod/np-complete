@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import * as THREE_MOCK from "./helpers/three-mock.js";
 import { readFile } from "node:fs/promises";
 
 const swPath = new URL("../sw.js", import.meta.url);
@@ -64,6 +65,7 @@ async function expectedCacheUrls() {
     ...appShellStaticUrls,
     ...(await runtimeSourceUrls()),
     "/manifest.json",
+    "/lib/three.module.min.js",
   ];
 }
 
@@ -170,6 +172,7 @@ function installBrowserEnv() {
     performance: globalThis.performance,
     requestAnimationFrame: globalThis.requestAnimationFrame,
     random: Math.random,
+    renderThree: globalThis.__THE_LOCK_RENDER3D_THREE__,
   };
 
   globalThis.document = {
@@ -179,10 +182,11 @@ function installBrowserEnv() {
     createElementNS: () => fakeEl(),
   };
   globalThis.localStorage = fakeLocalStorage();
-  globalThis.window = { matchMedia: () => ({ matches: true }) };
+  globalThis.window = { devicePixelRatio: 1, addEventListener() {}, removeEventListener() {}, matchMedia: () => ({ matches: true }) };
   globalThis.performance = { now: () => 0 };
   globalThis.requestAnimationFrame = () => 0;
   Math.random = () => 0.25;
+  globalThis.__THE_LOCK_RENDER3D_THREE__ = THREE_MOCK;
 
   return {
     el: (id) => elements.get(id),
@@ -193,6 +197,7 @@ function installBrowserEnv() {
       globalThis.performance = previous.performance;
       globalThis.requestAnimationFrame = previous.requestAnimationFrame;
       Math.random = previous.random;
+      globalThis.__THE_LOCK_RENDER3D_THREE__ = previous.renderThree;
       elements.clear();
     },
   };
@@ -225,13 +230,13 @@ test("offline: service worker caches the core app shell", async () => {
   listeners.install({ waitUntil: (promise) => { installPromise = promise; } });
   await Promise.resolve(installPromise);
 
-  assert.equal(CACHE_NAME, "the-lock-v4");
+  assert.equal(CACHE_NAME, "the-lock-v5");
   assert.match(CACHE_NAME, /^the-lock-v\d+$/);
   assert.deepEqual(urlsToCache, expectedUrls);
   for (const url of criticalRuntimeUrls) {
     assert.ok(urlsToCache.includes(url), `${url} must be precached for offline mode flows`);
   }
-  assert.deepEqual(added, [{ name: "the-lock-v4", urls: expectedUrls }]);
+  assert.deepEqual(added, [{ name: "the-lock-v5", urls: expectedUrls }]);
 });
 
 test("offline: cached assets are served when fetch is offline", async () => {
@@ -266,7 +271,7 @@ test("offline: older cache versions are cleaned up on activate", async () => {
   listeners.activate({ waitUntil: (promise) => { activatePromise = promise; } });
   await Promise.resolve(activatePromise);
 
-  assert.deepEqual(deleted, ["the-lock-v0", "the-lock-v1", "the-lock-v2", "the-lock-v3", "other-cache"]);
+  assert.deepEqual(deleted, ["the-lock-v0", "the-lock-v1", "the-lock-v2", "the-lock-v3", "the-lock-v4", "other-cache"]);
 });
 
 test("offline: the app boots in a mocked browser environment", async () => {

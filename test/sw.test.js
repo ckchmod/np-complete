@@ -64,6 +64,7 @@ async function expectedCacheUrls() {
     ...appShellStaticUrls,
     ...(await runtimeSourceUrls()),
     "/manifest.json",
+    "/lib/three.module.min.js",
   ];
 }
 
@@ -226,7 +227,7 @@ test("sw: file exists and parses as JavaScript", async () => {
 test("sw: cache name is versioned", async () => {
   const { CACHE_NAME } = await loadServiceWorker();
 
-  assert.equal(CACHE_NAME, "the-lock-v4");
+  assert.equal(CACHE_NAME, "the-lock-v5");
   assert.match(CACHE_NAME, /^the-lock-v\d+$/);
 });
 
@@ -261,7 +262,7 @@ test("sw: install, fetch, and activate handlers use a cache-first app shell", as
   let installPromise;
   listeners.install({ waitUntil: (promise) => { installPromise = promise; } });
   await Promise.resolve(installPromise);
-  assert.deepEqual(added, [{ name: "the-lock-v4", urls: expectedUrls }]);
+  assert.deepEqual(added, [{ name: "the-lock-v5", urls: expectedUrls }]);
 
   let cachedPromise;
   listeners.fetch({ request: { method: "GET", url: "/styles.css" }, respondWith: (promise) => { cachedPromise = promise; } });
@@ -276,7 +277,7 @@ test("sw: install, fetch, and activate handlers use a cache-first app shell", as
   let activatePromise;
   listeners.activate({ waitUntil: (promise) => { activatePromise = promise; } });
   await Promise.resolve(activatePromise);
-  assert.deepEqual(deleted, ["the-lock-v0", "the-lock-v1", "the-lock-v2", "the-lock-v3", "other-cache"]);
+  assert.deepEqual(deleted, ["the-lock-v0", "the-lock-v1", "the-lock-v2", "the-lock-v3", "the-lock-v4", "other-cache"]);
 });
 
 test("main: service worker registration is optional and surfaces updates", async () => {
